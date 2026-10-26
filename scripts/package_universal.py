@@ -31,7 +31,7 @@ def package(four_ge, two_p5g, output, stock_four_ge, stock_two_p5g):
                 'sha256': hashlib.sha256(output.read_bytes()).hexdigest(),
                 'variants': {name: report['boot_sha256']
                              for name, report in zip(('4ge', '2p5g'), reports)},
-                'selection': 'GPIO113:111 strap, followed by local GPT/BL2/BL31 comparison'}
+                'selection': 'Preserved BL2/BL31 fingerprints, GPIO113:111 strap fallback, followed by local GPT/BL2/BL31 comparison'}
     output.with_suffix('.json').write_text(json.dumps(manifest, indent=2) + '\n')
     print(json.dumps(manifest))
     return manifest

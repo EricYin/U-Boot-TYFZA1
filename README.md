@@ -38,6 +38,8 @@
 
 通用包包含两种机型的 loader，共用同一份 U-Boot BL33。安装时核对本机 GPT 分区布局、BL2、BL31 和保留区域，再选择匹配镜像；GPT 中每台设备独有的 GUID 和 CRC 不参与逐字节比对，但仍校验 CRC。原厂版本造成的 FIP 分区长度差异允许兼容，前提是起点固定、终点位于对应的 `0xc0000` 槽内、主备 GPT 长度一致，且能容纳待写入的完整 FIP。GPT 保留本机原值。
 
+启动时优先用 boot 分区中保留的 BL2、BL31 完整 SHA-256 指纹识别板型，主 FIP 无法识别时尝试备用 FIP；均无法匹配已知机型时才读取 GPIO strap。恢复网页网口说明、网口初始化及 FIT 配置共用该识别结果，避免全千兆版因 GPIO 读为 `000` 被误判成 2.5G 版。
+
 ## 下载
 
 前往 **[Releases](https://github.com/LeoooChen/U-Boot-TYFZA1/releases/latest)** 下载 **`tyfza1-uboot-install.run`**。全千兆版和 2.5G 口版使用同一个文件。

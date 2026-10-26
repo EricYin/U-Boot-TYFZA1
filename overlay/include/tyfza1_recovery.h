@@ -2,6 +2,7 @@
 #ifndef TYFZA1_RECOVERY_H
 #define TYFZA1_RECOVERY_H
 #include <linux/types.h>
+int tyfza1_board_id(void);
 int tyfza1_reset_held(void);
 void tyfza1_boot_leds(void);
 enum tyfza1_leds {

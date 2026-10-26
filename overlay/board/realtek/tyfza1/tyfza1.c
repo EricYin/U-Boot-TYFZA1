@@ -84,7 +84,7 @@ void board_preboot_os(void)
 int board_late_init(void)
 {
 	u32 mask = 7U << 15;
-	u32 strap;
+	int strap;
 
 	/* Match the stock success handoff to BL2/BL31 and their watchdog state. */
 	writel(0, PER_WDT_CTRL);
@@ -94,10 +94,14 @@ int board_late_init(void)
 	env_set("mtdids", CONFIG_MTDIDS_DEFAULT);
 	env_set("mtdparts", CONFIG_MTDPARTS_DEFAULT);
 
-	/* GPIO113:111, matching the original conf_match environment. */
-	setbits_le32(0xf432010c, mask);
-	setbits_le32(0xf432932c, mask);
-	strap = (readl(0xf4329334) >> 15) & 7;
+	/* Prefer the preserved early firmware; a low GPIO alone is not a 2.5G ID. */
+	strap = tyfza1_board_id();
+	if (strap < 0) {
+		/* GPIO113:111, matching the original conf_match environment. */
+		setbits_le32(0xf432010c, mask);
+		setbits_le32(0xf432932c, mask);
+		strap = (readl(0xf4329334) >> 15) & 7;
+	}
 	if (strap > 1) {
 		env_set("bootcmd", "tyfrecovery");
 		env_set("board_variant", "unknown");

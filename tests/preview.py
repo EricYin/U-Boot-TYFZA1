@@ -26,8 +26,8 @@ class Preview(BaseHTTPRequestHandler):
             responses = {
                 "/api/device": {"model": "Tianyi TYFZA1",
                                 "ports": "2.5GE + 3×GE" if variant == "2p5g" else "4×GE",
-                                "version": "U-Boot 2026.07 (Sep 30 2026 - 15:00:05 +0000) TYFZA1 1.4",
-                                "project_version": "1.4", "build_commit": "b6b04e4",
+                                "version": "U-Boot 2026.07 (Sep 30 2026 - 15:00:05 +0000) TYFZA1 1.5",
+                                "project_version": "1.5", "build_commit": "b6b04e4",
                                 "ram_bytes": 0x20000000,
                                 "flash_bytes": 0x10000000, "ubi": True, "rebuild": True,
                                 "board_data": board_data},
