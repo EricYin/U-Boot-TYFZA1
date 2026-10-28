@@ -41,8 +41,8 @@ static int verify_fit(const struct tyf_payload *image)
 	const char *conf = tyfza1_boot_config();
 	void *dtb = NULL;
 	size_t size;
-	u8 comp;
-	int node, fdt, images, child, ret = -EINVAL;
+	u8 comp, type, arch;
+	int kernel, node, fdt, images, child, ret = -EINVAL;
 	if (!conf ||
 	    fit_check_format(image->data, image->size)) return -EINVAL;
 	images = fdt_path_offset(image->data, FIT_IMAGES_PATH);
@@ -57,6 +57,10 @@ static int verify_fit(const struct tyf_payload *image)
 	if (!fit_all_image_verify(image->data)) return -EINVAL;
 	node = fit_conf_get_node(image->data, conf);
 	if (node < 0) return node;
+	kernel = fit_conf_get_prop_node(image->data, node, FIT_KERNEL_PROP, IH_PHASE_NONE);
+	if (kernel < 0 || fit_image_get_type(image->data, kernel, &type) ||
+	    type != IH_TYPE_KERNEL || fit_image_get_arch(image->data, kernel, &arch) ||
+	    arch != IH_ARCH_ARM64) return -EINVAL;
 	fdt = fit_conf_get_prop_node(image->data, node, FIT_FDT_PROP, IH_PHASE_NONE);
 	if (fdt < 0 || fit_image_get_data(image->data, fdt, &data, &size) ||
 	    (const unsigned char *)data < image->data || size > image->size ||
@@ -82,9 +86,26 @@ static int verify_fit(const struct tyf_payload *image)
 	if (fdt_check_full(data, size)) goto out;
 	ret = fdt_node_check_compatible(data, 0, "tianyi,tyfza1");
 	if (ret) ret = -EINVAL;
+	if (!ret) {
+		bool two = !fdt_node_check_compatible(data, 0, "tianyi,tyfza1-2p5g");
+		if (two != !strcmp(conf, "conf-0")) ret = -EINVAL;
+	}
 out:
 	free(dtb);
 	return ret;
+}
+
+static int verify_system_fit(const struct tyf_payload *image)
+{
+	u8 type, comp;
+	int script, ret = verify_fit(image);
+	if (ret) return ret;
+	/* Normal boot sources this image by name to set the root volume arguments. */
+	script = fdt_path_offset(image->data, "/images/script");
+	if (script < 0 || fit_image_get_type(image->data, script, &type) ||
+	    type != IH_TYPE_SCRIPT || fit_image_get_comp(image->data, script, &comp) ||
+	    comp != IH_COMP_NONE) return -EINVAL;
+	return 0;
 }
 
 int tyfza1_check_fit(ulong address, size_t size)
@@ -175,6 +196,7 @@ int tyfza1_install_system(ulong address, size_t size, void (*poll)(void))
 	struct ubi_device *ubi;
 	struct ubi_volume *rootvol, *data;
 	size_t capacity;
+	bool factory_v1;
 	int slot, root_lebs, available, ret = -EINVAL;
 
 	if (committed && strcmp(committed, "0") && strcmp(committed, "1")) goto out;
@@ -185,12 +207,20 @@ int tyfza1_install_system(ulong address, size_t size, void (*poll)(void))
 	}
 	if (env_get("sw_active")) old_active[0] = env_get("sw_active")[0];
 	if (env_get("sw_tryactive")) old_try[0] = env_get("sw_tryactive")[0];
-	if (tyf_parse_sysupgrade(input, size, &fw) || verify_fit(&fw.kernel)) {
-		puts("Expected a TYFZA1 sysupgrade archive with a matching, hash-verified FIT and SquashFS.\n");
+	if (tyfza1_check_sysupgrade(input, size, &factory_v1, poll) ||
+	    tyf_parse_sysupgrade(input, size, &fw) || verify_system_fit(&fw.kernel)) {
+		puts("Expected an intact OpenWrt sysupgrade with fwtool metadata and a FIT matching the saved boot configuration.\n");
 		goto out;
 	}
 	ret = ubi_part("ubi_device", NULL);
 	if (ret) goto out;
+	ubi = ubi_devices[0];
+	if (!ubi || ubi->ro_mode) { ret = -EROFS; goto out; }
+	if (!factory_v1 && ((ubi->volumes[12] && !strcmp(ubi->volumes[12]->name, "tyfza1_factory")) ||
+			    (ubi->volumes[13] && !strcmp(ubi->volumes[13]->name, "tyfza1_factory_backup")))) {
+		puts("Migrated calibration requires factory-v1 firmware.\n");
+		ret = -EINVAL; goto out;
+	}
 	/* Older Linux installers never persisted tyfza1_slot: inspect their FITs. */
 	slot = installed ? old_slot[0] - '0' : installed_openwrt_slot(old_commit[0] - '0');
 	if (slot < 0) { ret = slot; goto out; }
@@ -201,11 +231,14 @@ int tyfza1_install_system(ulong address, size_t size, void (*poll)(void))
 	ubi = ubi_devices[0];
 	rootvol = ubi->volumes[slot ? 7 : 4];
 	data = ubi->volumes[11];
-	if (!rootvol || strcmp(rootvol->name, root) ||
+	if (!ubi->volumes[slot ? 6 : 3] || strcmp(ubi->volumes[slot ? 6 : 3]->name, kernel) ||
+	    !rootvol || strcmp(rootvol->name, root) ||
 	    (data && strcmp(data->name, "rootfs_data")) ||
 	    fw.root.size > 33648640) { ret = -EINVAL; goto out; }
 	root_lebs = DIV_ROUND_UP(fw.root.size, rootvol->usable_leb_size);
 	available = ubi->avail_pebs + rootvol->reserved_pebs + (data ? data->reserved_pebs : 0);
+	if (ubi->beb_rsvd_level > ubi->beb_rsvd_pebs)
+		available -= ubi->beb_rsvd_level - ubi->beb_rsvd_pebs;
 	if (available - root_lebs < DIV_ROUND_UP(16777216, ubi->leb_size)) {
 		ret = -ENOSPC; goto out;
 	}
@@ -231,11 +264,11 @@ int tyfza1_install_system(ulong address, size_t size, void (*poll)(void))
 	ret = run_command("ubi create rootfs_data 0 d b", 0);
 	if (ret) goto out;
 	/* Commit only after both new volumes have passed independent readback. */
-	env_set("sw_commit", slot ? "1" : "0");
-	env_set("sw_active", slot ? "1" : "0");
-	env_set("sw_tryactive", "2");
-	env_set("tyfza1_slot", slot ? "1" : "0");
-	ret = env_save();
+	ret = env_set("sw_commit", slot ? "1" : "0");
+	if (!ret) ret = env_set("sw_active", slot ? "1" : "0");
+	if (!ret) ret = env_set("sw_tryactive", "2");
+	if (!ret) ret = env_set("tyfza1_slot", slot ? "1" : "0");
+	if (!ret) ret = env_save();
 	if (ret) {
 		env_set("sw_commit", old_commit);
 		env_set("sw_active", old_active);

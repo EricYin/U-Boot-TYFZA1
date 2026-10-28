@@ -3,6 +3,7 @@
 #define TYFZA1_FORMATS_H
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #define TYF_BOOT_SIZE 0x200000U
 #define TYF_FIP_SIZE 0xc0000U
@@ -30,5 +31,6 @@ int tyf_select_loader(const void *data, size_t size, const char *variant,
 		      struct tyf_payload *out);
 int tyf_loader_preserves_device(const void *next, size_t next_size,
 			       const void *current, size_t current_size);
+int tyfza1_check_sysupgrade(const void *data, size_t size, bool *factory_v1, void (*poll)(void));
 int tyf_parse_sysupgrade(const void *data, size_t size, struct tyf_firmware *out);
 #endif

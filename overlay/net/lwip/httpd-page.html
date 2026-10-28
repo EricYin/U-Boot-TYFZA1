@@ -5,27 +5,28 @@
 <title>TYFZA1 U-Boot</title>
 <style>
 :root{color-scheme:light;--blue:#1769aa;--line:#dbe1e8;--muted:#627083}
-*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#202a36;font:15px system-ui,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#202a36;font:15px/1.55 system-ui,sans-serif}
 main{max-width:960px;margin:auto;padding:28px 20px}header,.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}header{justify-content:space-between}
-h1{font-size:26px;margin:0}h2{font-size:20px;margin:0 0 18px}h3{font-size:16px;margin:0 0 12px}
+h1{font-size:26px;margin:0}h2{font-size:20px;margin:0 0 16px}h3{font-size:16px;margin:0 0 12px}
 .info{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:22px 0;padding:20px;background:white;border:1px solid var(--line);border-radius:10px}
-.info span{display:block;color:var(--muted);margin-bottom:6px}.info strong{overflow-wrap:anywhere;font-size:16px}.info small{color:var(--muted);font-size:12px;margin-left:6px}
+.info span{display:block;color:var(--muted);margin-bottom:6px}.info strong{overflow-wrap:anywhere;font-size:16px}.info small{display:block;color:var(--muted);font-size:13px;margin-top:5px;line-height:1.5}#link{white-space:nowrap}.info>div{min-width:0}
 nav{display:flex;gap:8px;margin:20px 0}button{border:1px solid var(--line);border-radius:7px;background:white;color:inherit;font:inherit;padding:9px 15px;cursor:pointer}
 button.primary,nav button.active{background:var(--blue);border-color:var(--blue);color:white}button.danger{border-color:#b42318;color:#b42318}
 button:disabled,input:disabled,select:disabled{opacity:.5;cursor:default}.panel,.status{background:white;border:1px solid var(--line);border-radius:10px;padding:22px;margin-bottom:16px}
-input,select{font:inherit;padding:10px;border:1px solid #aeb9c7;border-radius:6px;max-width:100%;background:white;min-width:0}.file{position:relative;flex:1 1 240px;display:flex;align-items:center;gap:10px;min-width:0;padding:6px 10px;border:1px solid #aeb9c7;border-radius:6px;background:white;cursor:pointer}.file input{position:absolute;width:1px;height:1px;opacity:0}.file b{font-weight:normal;white-space:nowrap;padding:4px 10px;border:1px solid var(--line);border-radius:5px}.file span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file:has(input:disabled){opacity:.5;cursor:default}
-label{display:block;margin-bottom:8px}.wide{width:100%}.stack{display:grid;gap:16px}.muted{color:var(--muted)}.actions{margin-top:18px}
+button{min-height:42px}input,select{font:inherit;min-height:42px;padding:10px;border:1px solid #aeb9c7;border-radius:6px;max-width:100%;background:white;min-width:0}.file{position:relative;flex:1 1 240px;display:flex;align-items:center;gap:10px;min-width:0;padding:6px 10px;border:1px solid #aeb9c7;border-radius:6px;background:white;cursor:pointer}.file input{position:absolute;width:1px;height:1px;opacity:0}.file b{font-weight:normal;white-space:nowrap;padding:4px 10px;border:1px solid var(--line);border-radius:5px}.file span{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file:has(input:disabled){opacity:.5;cursor:default}
+.row>label{margin:0}.row>.file{align-self:stretch}.row>button{flex:0 0 auto;white-space:nowrap}label{display:block;margin-bottom:8px}.wide{width:100%}.stack{display:grid;gap:16px}.muted{color:var(--muted)}.actions{margin-top:18px}
 progress{width:100%;height:14px;accent-color:var(--blue)}#output{white-space:pre-wrap;word-break:break-word;max-height:280px;overflow:auto;font:13px/1.5 ui-monospace,monospace;margin:14px 0 0}
 #state{font-weight:600}#transfer{font-variant-numeric:tabular-nums;color:var(--muted)}.status .row{justify-content:space-between}
 details{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}summary{cursor:pointer;font-weight:600;margin-bottom:16px}
-hr{border:0;border-top:1px solid var(--line);margin:26px 0}[hidden]{display:none!important}@media(max-width:650px){.info{grid-template-columns:1fr 1fr}.row input{width:100%}main{padding:18px 12px}}
+hr{border:0;border-top:1px solid var(--line);margin:26px 0}[hidden]{display:none!important}#bootConfig{flex:1;min-width:0}.config-box{padding:18px;background:#f6f8fb;border:1px solid var(--line);border-radius:8px;margin-bottom:24px}.config-box p{margin:10px 0 0}.section-title{margin:0 0 8px}.section-note{margin:0 0 16px;color:var(--muted);font-size:13px}.file-row{display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:stretch}.file-row>.file{width:100%;margin:0}.config-state{font-size:13px;color:#17623c}.config-state.pending{color:#995300}.field-caption{font-size:13px;color:var(--muted)}.panel p{overflow-wrap:anywhere}
+@media(max-width:650px){main{padding:18px 12px}.info{grid-template-columns:1fr;gap:16px;padding:18px}.panel{padding:18px}.file-row{grid-template-columns:minmax(0,1fr)}.file-row>button{width:100%}header h1{font-size:23px}.config-box{padding:14px}.row input{width:100%}nav button{flex:1;padding:9px 10px}}
 footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 </style>
 </head>
 <body><main>
 <header><h1>TYFZA1 U-Boot</h1><button id="language">简体中文</button></header>
 <div class="info">
-<div><span data-t="model">Model</span><strong id="model">—</strong><small id="ports"></small><small id="link"></small></div>
+<div><span data-t="model">Device</span><strong id="model">—</strong><small id="ports"></small><small id="link"></small></div>
 <div><span>RAM / Flash</span><strong id="memory">—</strong></div>
 <div><span data-t="version">Version</span><strong id="version">—</strong><small id="commit"></small></div>
 </div>
@@ -38,16 +39,21 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 </div>
 <hr id="bootDivider">
 <div id="ubiSection">
-<h2 data-t="install">Install system</h2>
-<label for="firmware">sysupgrade.bin</label>
-<p data-t="gigabitHint">Recovery uses ordinary gigabit ports; the 2.5G port is unavailable here.</p>
-<label data-t="bootConfig">OpenWrt boot configuration</label>
+<div class="config-box">
+<h2 class="section-title" data-t="bootConfig">OpenWrt boot configuration</h2>
+<p class="section-note" data-t="gigabitHint">Recovery uses ordinary gigabit ports; the 2.5G port is unavailable here.</p>
+<label for="bootConfig" class="field-caption" data-t="hardwareChoice">Hardware configuration for Linux</label>
 <div class="row"><select id="bootConfig"><option value="" data-t="selectConfig">Select once</option><option value="conf-1" data-t="fourGe">Four gigabit ports</option><option value="conf-0" data-t="twoGe">2.5G + three gigabit ports</option></select><button id="bootConfigButton" data-t="save">Save</button></div>
-<p data-t="bootConfigHint">Select the physical hardware once; future upgrades retain this setting.</p>
-<div class="row"><input id="firmware" type="file" accept=".bin"><button id="flashButton" class="primary" data-t="uploadFlash">Upload and flash</button></div>
-<h3 class="actions" data-t="ubootTitle">Flash U-Boot</h3>
-<label for="uboot">tyfza1-uboot-universal.bin</label>
-<div class="row"><input id="uboot" type="file" accept=".img,.bin"><button id="ubootButton" data-t="uploadWrite">Upload and write</button></div>
+<p data-t="bootConfigHint">Select the Linux boot configuration once; recovery networking is the same on both boards.</p>
+<p id="bootConfigState" class="config-state" role="status"></p>
+</div>
+<h2 data-t="install">Install system</h2>
+<p class="section-note" data-t="universalFirmware">Both variants use the same sysupgrade.bin. The saved configuration selects Linux hardware settings.</p>
+<label for="firmware" class="field-caption">sysupgrade.bin</label>
+<div class="row file-row"><input id="firmware" type="file" accept=".bin"><button id="flashButton" class="primary" data-t="uploadFlash">Upload and flash</button></div>
+<hr><h2 data-t="ubootTitle">Flash U-Boot</h2>
+<label for="uboot" class="field-caption">tyfza1-uboot-universal.bin</label>
+<div class="row file-row"><input id="uboot" type="file" accept=".img,.bin"><button id="ubootButton" data-t="uploadWrite">Upload and write</button></div>
 <div class="row actions"><button data-action="boot-production" data-t="bootSystem">Boot system</button><button data-action="reset" data-t="reboot">Reboot</button></div>
 <div id="ubiManagement">
 <hr>
@@ -70,7 +76,7 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 <section class="panel" id="advanced" hidden>
 <h2 data-t="advanced">Advanced</h2>
 <h3 data-t="ramBoot">RAM boot</h3>
-<div class="row"><input id="initramfs" type="file"><button id="bootButton" data-t="uploadBoot">Upload and boot</button></div>
+<div class="row file-row"><input id="initramfs" type="file"><button id="bootButton" data-t="uploadBoot">Upload and boot</button></div>
 <details><summary data-t="partitionWrite">Write partition</summary>
 <div class="stack"><select id="writeTarget" class="wide"></select><input id="partitionImage" type="file"><button id="writeButton" class="danger" data-t="uploadWrite">Upload and write</button></div>
 </details>
@@ -96,20 +102,22 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 <script>
 'use strict';
 const words={
-zh:{gigabitHint:'恢复网页请连接普通千兆口；U-Boot 不启用 2.5G 口。',bootConfig:'OpenWrt 启动配置',selectConfig:'请选择一次',fourGe:'全千兆版（4 个千兆口）',twoGe:'2.5G 版（1 个 2.5G + 3 个千兆口）',bootConfigHint:'按设备实际网口选择并保存一次，后续升级保留。',linkDown:'网线未连接',fullDuplex:'全双工',halfDuplex:'半双工',gigabitMode:'千兆口恢复',networkSettings:'恢复地址使用 httpd_ipaddr / httpd_netmask（下次进入生效）。httpd_dhcp 设为 0 立即并持久关闭 DHCP 服务，设为 1 下次进入时启用；电脑可手动设置同网段静态地址。',bl2Title:'刷写 BL2',ubiOperations:'UBI 操作',firstInstall:'可直接刷写 TYFZA1 sysupgrade。重建 UBI 会清空系统数据，出厂配置和校准卷保留在 Flash 中。',boardData:'板级数据',ubootTitle:'刷写 U-Boot',model:'机型',chooseFile:'选择文件',noFile:'未选择文件',version:'版本',flash:'刷机',backup:'备份',advanced:'高级',install:'刷写系统',uploadFlash:'上传并刷写',bootSystem:'启动系统',reboot:'重启',target:'目标',download:'下载备份',ramBoot:'内存启动',uploadBoot:'上传并启动',rebuild:'重建 UBI',partitionWrite:'分区写入',restoreAll:'恢复整片 Flash',restoreAllHint:'从 Flash 开头恢复主数据 .bin，包含引导程序和板级数据。按段写入并校验，最后更新引导区。坏块保留原偏移，不包含 OOB。文件大小必须与 Flash 容量相同。',flashTooLarge:'文件超过 Flash 容量',flashSizeMismatch:'请选择与 Flash 容量相同的完整主数据备份',clearBadBlocks:'清除坏块标记',clearBadBlocksHint:'擦除整片 NAND 闪存，包括出厂标记的坏块。所有数据将丢失。',scrubConfirm1:'此操作将清除所有坏块标记并擦除全部数据！\n\n点击"确定"后，请在 5 秒内再次点击按钮以确认。',scrubConfirm2:'再次点击以执行清除坏块操作！',uploadWrite:'上传并写入',environment:'环境变量',save:'保存',console:'命令控制台',execute:'执行',serial:'返回串口',cancel:'取消传输',idle:'就绪',upload:'上传中',downloadPhase:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中',waiting:'等待设备响应',busy:'设备正在处理其他操作',choose:'请选择文件',failed:'请求失败',cancelled:'传输已取消',whole:'整片 Flash',mtdHint:'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。',volumeHint:'UBI 卷数据',taskChanged:'设备任务已变化，请刷新页面',network:'连接中断，请检查设备状态'},
-en:{gigabitHint:'Connect an ordinary gigabit port; U-Boot does not enable the 2.5G port.',bootConfig:'OpenWrt boot configuration',selectConfig:'Select once',fourGe:'Four gigabit ports',twoGe:'2.5G + three gigabit ports',bootConfigHint:'Select the physical hardware and save once; upgrades retain this setting.',linkDown:'Link down',fullDuplex:'full duplex',halfDuplex:'half duplex',gigabitMode:'Gigabit recovery',networkSettings:'Use httpd_ipaddr / httpd_netmask for the recovery address (next start). Set httpd_dhcp to 0 to disable DHCP immediately and persistently; 1 enables it on the next start.',bl2Title:'Flash BL2',ubiOperations:'UBI operations',firstInstall:'Install a TYFZA1 sysupgrade image directly. Rebuilding UBI replaces system volumes and keeps factory volumes in Flash.',boardData:'Board data',ubootTitle:'Flash U-Boot',model:'Model',chooseFile:'Choose file',noFile:'No file selected',version:'Version',flash:'Flash',backup:'Backup',advanced:'Advanced',install:'Install system',uploadFlash:'Upload and flash',bootSystem:'Boot system',reboot:'Reboot',target:'Target',download:'Download backup',ramBoot:'RAM boot',uploadBoot:'Upload and boot',rebuild:'Rebuild UBI',partitionWrite:'Write partition',restoreAll:'Restore entire Flash',restoreAllHint:'Restores a main-area .bin from offset 0, including bootloader and board data. Chunks are written and verified before updating boot. Bad-block offsets stay in place; OOB is excluded. The file must match Flash capacity.',flashTooLarge:'File exceeds Flash capacity',flashSizeMismatch:'Select a complete main-area backup matching Flash capacity',clearBadBlocks:'Clear bad block markers',clearBadBlocksHint:'Erases the entire NAND chip including factory bad blocks. All data will be lost.',scrubConfirm1:'This will clear all bad block markers and erase all data!\n\nClick OK, then click the button again within 5 seconds to confirm.',scrubConfirm2:'Click again to execute scrub!',uploadWrite:'Upload and write',environment:'Environment',save:'Save',console:'Command console',execute:'Run',serial:'Return to serial',cancel:'Cancel transfer',idle:'Ready',upload:'Uploading',downloadPhase:'Downloading',queued:'Queued',working:'Working',done:'Complete',error:'Operation failed',erase:'Erasing',create:'Creating volumes',ready:'Upload complete','backup-ready':'Backup ready',verify:'Verifying',write:'Writing',waiting:'Waiting for device',busy:'Device is busy',choose:'Select a file',failed:'Request failed',cancelled:'Transfer cancelled',whole:'Entire Flash',mtdHint:'MTD backup contains physical main-area data with bad blocks padded with FF. NAND OOB is excluded.',volumeHint:'UBI volume data',taskChanged:'Device task changed; refresh the page',network:'Connection lost; check device status'}
+zh:{hardwareChoice:'Linux 对应的硬件版本',universalFirmware:'两种硬件使用同一份 sysupgrade.bin，按已保存的启动配置加载对应的 Linux 设备树。',configRequired:'尚未保存，请按实际设备选择。',configSaved:'当前启动配置已保存。',configUnsaved:'选择已更改，保存后才会生效。',saveBootConfig:'请先选择并保存 OpenWrt 启动配置，再刷写或启动系统。',gigabitHint:'恢复网页请连接普通千兆口；U-Boot 不启用 2.5G 口。',bootConfig:'OpenWrt 启动配置',selectConfig:'请选择一次',fourGe:'全千兆版（4 个千兆口）',twoGe:'2.5G 版（1 个 2.5G + 3 个千兆口）',bootConfigHint:'仅用于选择 Linux 设备树，恢复网络不区分机型。按实际设备选择并保存一次。',linkDown:'网线未连接',fullDuplex:'全双工',halfDuplex:'半双工',gigabitMode:'千兆口恢复',networkSettings:'恢复地址使用 httpd_ipaddr / httpd_netmask（下次进入生效）。httpd_dhcp 设为 0 立即并持久关闭 DHCP 服务，设为 1 下次进入时启用；电脑可手动设置同网段静态地址。',bl2Title:'刷写 BL2',ubiOperations:'UBI 操作',firstInstall:'可直接刷写 TYFZA1 sysupgrade。重建 UBI 会清空系统数据，出厂配置和校准卷保留在 Flash 中。',boardData:'板级数据',ubootTitle:'刷写 U-Boot',model:'设备',chooseFile:'选择文件',noFile:'未选择文件',version:'版本',flash:'刷机',backup:'备份',advanced:'高级',install:'刷写系统',uploadFlash:'上传并刷写',bootSystem:'启动系统',reboot:'重启',target:'目标',download:'下载备份',ramBoot:'内存启动',uploadBoot:'上传并启动',rebuild:'重建 UBI',partitionWrite:'分区写入',restoreAll:'恢复整片 Flash',restoreAllHint:'从 Flash 开头恢复主数据 .bin，包含引导程序和板级数据。按段写入并校验，最后更新引导区。坏块保留原偏移，不包含 OOB。文件大小必须与 Flash 容量相同。',flashTooLarge:'文件超过 Flash 容量',flashSizeMismatch:'请选择与 Flash 容量相同的完整主数据备份',clearBadBlocks:'清除坏块标记',clearBadBlocksHint:'擦除整片 NAND 闪存，包括出厂标记的坏块。所有数据将丢失。',scrubConfirm1:'此操作将清除所有坏块标记并擦除全部数据！\n\n点击"确定"后，请在 5 秒内再次点击按钮以确认。',scrubConfirm2:'再次点击以执行清除坏块操作！',uploadWrite:'上传并写入',environment:'环境变量',save:'保存',console:'命令控制台',execute:'执行',serial:'返回串口',cancel:'取消传输',idle:'就绪',upload:'上传中',downloadPhase:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中',waiting:'等待设备响应',busy:'设备正在处理其他操作',choose:'请选择文件',failed:'请求失败',cancelled:'传输已取消',whole:'整片 Flash',mtdHint:'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。',volumeHint:'UBI 卷数据',taskChanged:'设备任务已变化，请刷新页面',network:'连接中断，请检查设备状态'},
+en:{hardwareChoice:'Hardware configuration for Linux',universalFirmware:'Both variants use the same sysupgrade.bin. The saved configuration selects the Linux device tree.',configRequired:'Not saved. Select your hardware version.',configSaved:'Current boot configuration is saved.',configUnsaved:'Selection changed. Save it to apply.',saveBootConfig:'Select and save the OpenWrt boot configuration before installing or booting the system.',gigabitHint:'Connect an ordinary gigabit port; U-Boot does not enable the 2.5G port.',bootConfig:'OpenWrt boot configuration',selectConfig:'Select once',fourGe:'Four gigabit ports',twoGe:'2.5G + three gigabit ports',bootConfigHint:'This selects the Linux device tree. Recovery networking is identical. Select the physical hardware and save once.',linkDown:'Link down',fullDuplex:'full duplex',halfDuplex:'half duplex',gigabitMode:'Gigabit recovery',networkSettings:'Use httpd_ipaddr / httpd_netmask for the recovery address (next start). Set httpd_dhcp to 0 to disable DHCP immediately and persistently; 1 enables it on the next start.',bl2Title:'Flash BL2',ubiOperations:'UBI operations',firstInstall:'Install a TYFZA1 sysupgrade image directly. Rebuilding UBI replaces system volumes and keeps factory volumes in Flash.',boardData:'Board data',ubootTitle:'Flash U-Boot',model:'Device',chooseFile:'Choose file',noFile:'No file selected',version:'Version',flash:'Flash',backup:'Backup',advanced:'Advanced',install:'Install system',uploadFlash:'Upload and flash',bootSystem:'Boot system',reboot:'Reboot',target:'Target',download:'Download backup',ramBoot:'RAM boot',uploadBoot:'Upload and boot',rebuild:'Rebuild UBI',partitionWrite:'Write partition',restoreAll:'Restore entire Flash',restoreAllHint:'Restores a main-area .bin from offset 0, including bootloader and board data. Chunks are written and verified before updating boot. Bad-block offsets stay in place; OOB is excluded. The file must match Flash capacity.',flashTooLarge:'File exceeds Flash capacity',flashSizeMismatch:'Select a complete main-area backup matching Flash capacity',clearBadBlocks:'Clear bad block markers',clearBadBlocksHint:'Erases the entire NAND chip including factory bad blocks. All data will be lost.',scrubConfirm1:'This will clear all bad block markers and erase all data!\n\nClick OK, then click the button again within 5 seconds to confirm.',scrubConfirm2:'Click again to execute scrub!',uploadWrite:'Upload and write',environment:'Environment',save:'Save',console:'Command console',execute:'Run',serial:'Return to serial',cancel:'Cancel transfer',idle:'Ready',upload:'Uploading',downloadPhase:'Downloading',queued:'Queued',working:'Working',done:'Complete',error:'Operation failed',erase:'Erasing',create:'Creating volumes',ready:'Upload complete','backup-ready':'Backup ready',verify:'Verifying',write:'Writing',waiting:'Waiting for device',busy:'Device is busy',choose:'Select a file',failed:'Request failed',cancelled:'Transfer cancelled',whole:'Entire Flash',mtdHint:'MTD backup contains physical main-area data with bad blocks padded with FF. NAND OOB is excluded.',volumeHint:'UBI volume data',taskChanged:'Device task changed; refresh the page',network:'Connection lost; check device status'}
 };
 let language=(navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en', localBusy=false, remoteBusy=true, activeXHR=null, targets=[], flashBytes=0, selectedTab='flash', rebooting=false;
 let activeRestore=0,serverRestore=0,cancelRestore=false;
+let pageReady=false,localError='',lastLink=null,savedBootConfig='';
 const el=id=>document.getElementById(id), t=key=>words[language][key]||key, text=(id,value)=>{el(id).textContent=value};
 function applyLanguage(){
  document.documentElement.lang=language==='zh'?'zh-CN':'en';
  document.querySelectorAll('[data-t]').forEach(e=>e.textContent=t(e.dataset.t));
  text('language',language==='zh'?'English':'简体中文');catalog();
+ if(lastLink)showLink(lastLink);showBootConfigState();
 }
 function bytes(n){return n>=1048576?(n/1048576).toFixed(1)+' MiB':n>=1024?(n/1024).toFixed(1)+' KiB':n+' B'}
 function controls(){
- document.querySelectorAll('button,input,select').forEach(e=>{e.disabled=localBusy||remoteBusy||Boolean(serverRestore&&!activeRestore)});
+ document.querySelectorAll('button,input,select').forEach(e=>{e.disabled=!pageReady||localBusy||remoteBusy||Boolean(serverRestore&&!activeRestore)});
  el('cancel').disabled=false;el('cancel').hidden=!activeXHR&&!serverRestore&&!activeRestore;
 }
 function tab(name){selectedTab=name;['flash','backup','advanced'].forEach(n=>{el(n).hidden=n!==name;document.querySelector('[data-tab="'+n+'"]').classList.toggle('active',n===name)})}
@@ -143,7 +151,7 @@ function boardData(items){
  for(const item of items){
   const block=document.createElement('div');
   const label=document.createElement('label');label.textContent=item.target+' · '+item.kind.toUpperCase()+' · '+bytes(item.size);
-  const row=document.createElement('div');row.className='row';
+  const row=document.createElement('div');row.className='row file-row';
   const input=document.createElement('input');input.type='file';input.accept='.bin';
   const button=document.createElement('button');button.dataset.t='uploadWrite';button.textContent=t('uploadWrite');
   button.onclick=()=>run(async()=>{
@@ -158,13 +166,21 @@ async function request(url,options){
  if(!r.ok)throw new Error(r.status===409?t('busy'):value.error||t('failed'));
  return value;
 }
-function showLink(d){text('link',d.link_speed_mbps?d.link_speed_mbps+' Mbps · '+t(d.link_full_duplex?'fullDuplex':'halfDuplex'):t('linkDown'))}
+function showLink(d){lastLink=d;text('link',d.link_speed_mbps?d.link_speed_mbps+' Mbps · '+t(d.link_full_duplex?'fullDuplex':'halfDuplex'):t('linkDown'))}
+function showBootConfigState(){
+ const pending=el('bootConfig').value!==savedBootConfig;
+ text('bootConfigState',t(pending?'configUnsaved':savedBootConfig?'configSaved':'configRequired'));
+ el('bootConfigState').classList.toggle('pending',pending||!savedBootConfig);
+}
+function requireBootConfig(){
+ if(!['conf-0','conf-1'].includes(savedBootConfig)||el('bootConfig').value!==savedBootConfig)throw new Error(t('saveBootConfig'));
+}
 async function refresh(){
  const [d,s]=await Promise.all([request('/api/device'),request('/api/storage')]);targets=s.targets||[];
  text('model',d.model);text('memory',bytes(d.ram_bytes)+' / '+bytes(d.flash_bytes));
  el('ports').dataset.t='gigabitMode';text('ports',t('gigabitMode'));
  showLink(d);
- el('bootConfig').value=d.boot_config||'';
+ savedBootConfig=d.boot_config||'';el('bootConfig').value=savedBootConfig;showBootConfigState();
  text('version',d.project_version||d.version||'—');text('commit',d.build_commit||'');
  flashBytes=d.flash_bytes;
  const hasBl2=targets.some(v=>v.kind==='mtd'&&v.name==='bl2');
@@ -172,9 +188,9 @@ async function refresh(){
  el('bootDivider').hidden=!(hasBl2&&d.ubi);el('ubiManagement').hidden=!d.rebuild;
  el('boardDataSection').hidden=!d.board_data.length;boardData(d.board_data);
  document.querySelector('[data-tab="flash"]').hidden=!(hasBl2||d.ubi);
- if(!hasBl2&&!d.ubi&&selectedTab==='flash')tab('backup');catalog();
+ if(!hasBl2&&!d.ubi&&selectedTab==='flash')tab('backup');catalog();pageReady=true;controls();
 }
-function status(s){remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0;text('state',t(s.phase==='download'?'downloadPhase':s.phase));text('output',s.output||'');controls()}
+function status(s){remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0;if(!localError){text('state',t(s.phase==='download'?'downloadPhase':s.phase));text('output',s.output||'')}controls()}
 async function waitTask(id){
  let misses=0;
  for(;;){
@@ -215,10 +231,10 @@ async function uploadFile(input,url='/api/upload'){
 }
 async function upload(id){return uploadFile(el(id))}
 async function run(fn){
- if(localBusy||remoteBusy)return;
- localBusy=true;rebooting=false;text('output','');text('transfer','');el('progress').hidden=true;controls();
+ if(!pageReady||localBusy||remoteBusy)return;
+ localBusy=true;rebooting=false;localError='';text('output','');text('transfer','');el('progress').hidden=true;controls();
  try{await fn();if(!rebooting){text('state',t('done'));await refresh()}}
- catch(e){rebooting=false;text('state',t('error'));text('output',e.message)}
+ catch(e){rebooting=false;localError=e.message;text('state',t('error'));text('output',localError)}
  finally{
   localBusy=false;
   try{const s=await request('/api/task');remoteBusy=s.busy;serverRestore=s.restore_active?s.restore_id:0}catch(e){remoteBusy=true}
@@ -241,8 +257,8 @@ el('bl2Button').onclick=()=>run(async()=>{
 el('ubootButton').onclick=()=>run(async()=>{
  await task({operation:'flash-uboot',upload_id:await upload('uboot')});
 });
-el('flashButton').onclick=()=>run(async()=>task({operation:'flash',upload_id:await upload('firmware')}));
-el('bootButton').onclick=()=>run(async()=>{const id=await upload('initramfs');rebooting=true;await task({operation:'boot-upload',upload_id:id})});
+el('flashButton').onclick=()=>run(async()=>{requireBootConfig();await task({operation:'flash',upload_id:await upload('firmware')})});
+el('bootButton').onclick=()=>run(async()=>{requireBootConfig();const id=await upload('initramfs');rebooting=true;await task({operation:'boot-upload',upload_id:id})});
 el('writeButton').onclick=()=>run(async()=>{
  const v=targets[Number(el('writeTarget').value)];if(!v)throw new Error(t('failed'));
  await task({operation:'write',kind:v.kind,target:v.name,upload_id:await upload('partitionImage')});
@@ -284,7 +300,8 @@ el('backupButton').onclick=()=>run(async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=v.name+(v.kind==='mtd'?'-main':'')+'.bin';
  a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
 });
-el('bootConfigButton').onclick=()=>run(async()=>{await task({operation:'env-set',name:'tyf_bootconf',value:el('bootConfig').value});await refresh()});
+el('bootConfig').onchange=showBootConfigState;
+el('bootConfigButton').onclick=()=>run(()=>task({operation:'env-set',name:'tyf_bootconf',value:el('bootConfig').value}));
 el('envButton').onclick=()=>run(()=>task({operation:'env-set',name:el('envName').value,value:el('envValue').value}));
 el('envName').onchange=async()=>{try{const env=await request('/api/env');if(Object.hasOwn(env,el('envName').value))el('envValue').value=env[el('envName').value]}catch(e){}};
 el('commandButton').onclick=()=>run(()=>task({operation:'command',command:el('command').value}));
@@ -298,9 +315,17 @@ el('scrubButton').onclick=()=>{
  clearTimeout(scrubTimer);scrubArmed=false;el('scrubButton').textContent=t('clearBadBlocks');
  run(async()=>task({operation:'nand-scrub'}));
 };
-document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=>{rebooting=true;await task({operation:b.dataset.action})}));
+document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=>{if(b.dataset.action==='boot-production')requireBootConfig();rebooting=true;await task({operation:b.dataset.action})}));
 async function monitor(){
- if(!rebooting&&!localBusy){try{status(await request('/api/task'));if(!remoteBusy)showLink(await request('/api/device'))}catch(e){remoteBusy=true;text('state',t('waiting'));controls()}}
+ if(!rebooting&&!localBusy){
+  try{
+   const state=await request('/api/task');
+   if(!localBusy&&!rebooting){
+    status(state);
+    if(!remoteBusy){if(!pageReady)await refresh();else showLink(await request('/api/device'))}
+   }
+  }catch(e){remoteBusy=true;if(!localError)text('state',t('waiting'));controls()}
+ }
  setTimeout(monitor,1500);
 }
 document.querySelectorAll('input[type=file]').forEach(filePicker);

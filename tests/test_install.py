@@ -30,7 +30,7 @@ class InstallTests(unittest.TestCase):
 #define DIV_ROUND_UP(a,b) (((a)+(b)-1)/(b))
 struct ubi_device;
 struct ubi_volume { struct ubi_device *ubi; int vol_id, reserved_pebs, usable_leb_size; char name[24]; };
-struct ubi_device { int ubi_num, avail_pebs, leb_size; struct ubi_volume *volumes[128]; };
+struct ubi_device { int ubi_num, avail_pebs, leb_size, ro_mode, beb_rsvd_level, beb_rsvd_pebs; struct ubi_volume *volumes[128]; };
 struct ubi_volume_desc { struct ubi_volume *vol; };
 static struct ubi_device device, *ubi_devices[]={&device};
 static struct ubi_volume vols[128];
@@ -55,7 +55,9 @@ static int env_set(const char *name,const char *value) {
  p[0]=value?value[0]:0;p[1]=0;return 0;
 }
 static int env_save(void) { return save_fail?-EIO:0; }
+int tyfza1_check_sysupgrade(const void *p,size_t n,bool *v,void (*poll)(void)){(void)p;(void)n;*v=true;poll();return 0;}
 static int verify_fit(const struct tyf_payload *p) { return p->size?0:-EINVAL; }
+static int verify_system_fit(const struct tyf_payload *p) {return verify_fit(p);}
 static int ubi_part(const char *p,const char *v) { (void)v;return strcmp(p,"ubi_device"); }
 static struct ubi_volume *find(const char *name) {
  for(int i=0;i<128;i++)if(device.volumes[i]&&!strcmp(name,vols[i].name))return &vols[i];

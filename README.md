@@ -175,18 +175,18 @@ U-Boot 通过两种设备共有的 PON、LOS 灯指示当前状态（进入 Linu
 
 ### 安装 OpenWrt
 
-先在页面选择并保存与硬件对应的 **OpenWrt 启动配置**。这只决定 Linux 使用的设备树，不影响恢复网页的千兆口。
+先在页面选择并保存与硬件对应的 **OpenWrt 启动配置**。这只决定 Linux 使用的设备树，不影响恢复网页的千兆口。页面显示已保存后再刷写；更改选项必须重新保存。
 
 1. 下载 [PonWRT-TYFZA1](https://github.com/LeoooChen/PonWRT-TYFZA1/releases/latest) 的 `sysupgrade.bin`。
 2. 打开“刷机 → 刷写系统”，选择文件，点击“上传并刷写”。
 3. 等待任务完成，点击“启动系统”。
 4. 电脑重新获取地址后，打开 **[http://192.168.1.1](http://192.168.1.1/)**。
 
-首次安装先识别已有 PonWRT FIT；旧安装即使没有槽位标记，也会复用识别到的 OpenWrt 槽。两槽均无 PonWRT 时才选择原厂当前槽以外的系统槽，并记录为 OpenWrt 槽；后续恢复安装使用同一个槽。安装器校验并读回 kernel/rootfs，按实际镜像大小分配 rootfs，将余下空间分配给 rootfs_data。
+首次安装先识别已有 PonWRT FIT；旧安装即使没有槽位标记，也会复用识别到的 OpenWrt 槽。两槽均无 PonWRT 时才选择原厂当前槽以外的系统槽，并记录为 OpenWrt 槽；后续恢复安装使用同一个槽。安装器先验证 OpenWrt fwtool 整包 CRC、元数据和所选 FIT 设备树，再校验并读回 kernel/rootfs，按实际镜像大小分配 rootfs，将余下空间分配给 rootfs_data。
 
 当前 beta 镜像的可写数据卷约 **41.6 MiB**，空白文件系统可用约 **34.6 MiB**。身份、光学和无线校准数据及另一系统槽予以保留。
 
-恢复安装会初始化 OpenWrt 配置。日常保留配置升级可使用 LuCI“系统 → 备份与更新”，或执行：
+请使用完整的发布版 `sysupgrade.bin`，不要去掉文件尾部的 OpenWrt 元数据。已迁移校准存储的设备仅接受 `factory-v1` 固件。恢复安装会初始化 OpenWrt 配置，重刷已有系统槽不提供断电无损保证。日常保留配置升级可使用 LuCI“系统 → 备份与更新”，或执行：
 
 ```sh
 sysupgrade /tmp/sysupgrade.bin
@@ -257,6 +257,8 @@ python3 scripts/test_sandbox_crypto.py
 冷启动错误传递、实际 PHY 协商解析和下载中断处理见 [后续复核](docs/COLD-NEGOTIATION-DOWNLOAD-REVIEW.md)。
 
 上传内存边界、重复恢复启动与网页状态的稳定性修复见 [稳定性复核](docs/STABILITY-REVIEW.md)。
+
+实际 0.8.3-beta 通用包的双配置安装与前端布局验证见 [sysupgrade 与页面核验](docs/SYSUPGRADE-AND-UI-REVIEW.md)。
 
 ## 来源与许可
 

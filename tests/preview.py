@@ -4,9 +4,13 @@
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import re
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
+VERSION = (ROOT / "VERSION").read_text().strip()
+BUILD = ROOT / "build/u-boot/include/tyfza1_build.h"
+COMMIT = re.search(r'TYFZA1_BUILD_COMMIT "([^"]*)"', BUILD.read_text())[1] if BUILD.exists() else "preview"
 BOARD_DATA = [("ubi_Config", 0x60e000), ("ubi_fpga", 0x41e000),
               ("ubi_DTB0", 0x5d000), ("ubi_DTB1", 0x5d000)]
 
@@ -27,8 +31,8 @@ class Preview(BaseHTTPRequestHandler):
                 "/api/device": {"model": "Tianyi TYFZA1",
                                 "boot_config": "conf-0" if variant == "2p5g" else "conf-1",
                                 "link_speed_mbps": 1000, "link_full_duplex": True,
-                                "version": "U-Boot 2026.07 (Sep 30 2026 - 15:00:05 +0000) TYFZA1 1.5",
-                                "project_version": "1.5", "build_commit": "b6b04e4",
+                                "version": f"U-Boot TYFZA1 {VERSION}",
+                                "project_version": VERSION, "build_commit": COMMIT,
                                 "ram_bytes": 0x20000000,
                                 "flash_bytes": 0x10000000, "ubi": True, "rebuild": True,
                                 "board_data": board_data},

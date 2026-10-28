@@ -81,6 +81,37 @@ vm.runInContext(script,context);
   await vm.runInContext('monitor()',context);
   assert.equal(requests,2,'Failed boot must resume task and link polling');
  }finally{context.setTimeout=originalTimeout;context.fetch=originalFetch;}
+ await vm.runInContext(`remoteBusy=false;run(async()=>{throw new Error('Choose a firmware file')})`,context);
+ vm.runInContext("status({busy:false,phase:'idle',output:''})",context);
+ assert.equal(document.getElementById('output').textContent,'Choose a firmware file');
+ vm.runInContext("localError='';pageReady=false;targets=[];remoteBusy=true",context);
+ let failed=true;const seen=[];
+ context.fetch=async(url,...args)=>{seen.push(url);if(url==='/api/storage'&&failed){failed=false;throw new Error('offline')}return originalFetch(url,...args)};
+ try{
+  await vm.runInContext('monitor()',context);
+  assert.equal(vm.runInContext('pageReady',context),false);
+  await vm.runInContext('monitor()',context);
+  assert.equal(vm.runInContext('pageReady',context),true);
+  assert.equal(seen.filter(x=>x==='/api/storage').length,2);
+  vm.runInContext("language='en';showLink({link_speed_mbps:100,link_full_duplex:true});language='zh';applyLanguage()",context);
+  assert.equal(document.getElementById('link').textContent,'100 Mbps · 全双工');
+ }finally{context.fetch=originalFetch;}
+ const savedTask=vm.runInContext('task',context),savedUpload=vm.runInContext('upload',context);
+ let attempts=0;context.testUpload=async()=>{attempts++;return 1};context.testTask=async()=>({});
+ vm.runInContext('upload=testUpload;task=testTask;remoteBusy=false;localError=""',context);
+ try{
+  for(const value of ['','conf-1']){
+   device.boot_config=value;await vm.runInContext('refresh()',context);
+   vm.runInContext("el('bootConfig').value='conf-0';showBootConfigState()",context);
+   await vm.runInContext("el('flashButton').onclick()",context);
+   await vm.runInContext("el('bootButton').onclick()",context);
+   assert.equal(attempts,0,'Unsaved configuration must prevent system upload');
+  }
+  device.boot_config='conf-0';await vm.runInContext('refresh()',context);
+  await vm.runInContext("el('flashButton').onclick()",context);assert.equal(attempts,1);
+  device.boot_config='';await vm.runInContext('refresh()',context);
+  await vm.runInContext("el('ubootButton').onclick()",context);assert.equal(attempts,2,'U-Boot update must not depend on Linux configuration');
+ }finally{context.savedTask=savedTask;context.savedUpload=savedUpload;vm.runInContext('task=savedTask;upload=savedUpload;localError=""',context);}
  const restore=JSON.parse(await vm.runInContext(fs.readFileSync(path.join(__dirname,'browser_restore_fixture.js'),'utf8'),context));
  assert.equal(restore.results.length,5);
  console.log('Version/commit, both boards, translation, file selection and five restore flows passed');
