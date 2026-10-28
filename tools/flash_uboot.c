@@ -41,7 +41,7 @@ out:
 	return data;
 }
 
-static const char *select_board(const unsigned char *bundle, const unsigned char *current,
+static const char *select_boot_profile(const unsigned char *bundle, const unsigned char *current,
 			       struct tyf_payload *selected)
 {
 	static const char *names[] = { "4ge", "2p5g" };
@@ -135,13 +135,13 @@ int main(int argc, char **argv)
 		if (current && transfer(fd, current, TYF_BOOT_SIZE, 0, 0)) { free(current); current = NULL; }
 	}
 	if (!current) { fprintf(stderr, "Cannot read the complete existing boot image\n"); goto out; }
-	variant = select_board(bundle, current, &selected);
+	variant = select_boot_profile(bundle, current, &selected);
 	if (!variant) { fprintf(stderr, "Package signatures or local BL2/BL31/GPT profile do not match\n"); goto out; }
 	SHA256(selected.data, selected.size, digest);
-	printf("Detected TYFZA1 %s; matching 2 MiB loader SHA256: ", variant);
+	printf("Matching boot profile %s; 2 MiB loader SHA256: ", variant);
 	for (i = 0; i < sizeof(digest); i++) printf("%02x", digest[i]);
 	putchar('\n');
-	if (checking) { puts("Package and board checks passed; Flash unchanged."); result = 0; goto out; }
+	if (checking) { puts("Package and boot compatibility checks passed; Flash unchanged."); result = 0; goto out; }
 	snprintf(backup, sizeof(backup), "tyfza1-boot-backup-%ld-%ld.bin", (long)time(NULL), (long)getpid());
 	saved = open(backup, O_WRONLY | O_CREAT | O_EXCL, 0600);
 	if (saved < 0 || transfer(saved, current, TYF_BOOT_SIZE, 0, 1) || fsync(saved)) {

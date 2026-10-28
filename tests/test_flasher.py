@@ -53,13 +53,13 @@ int test_erases(void) { return erases; }
 unsigned int test_offset(int i) { return offsets[i]; }
 int test_select(const unsigned char *bundle, const unsigned char *current) {
  struct tyf_payload selected;
- const char *variant = select_board(bundle, current, &selected);
+ const char *variant = select_boot_profile(bundle, current, &selected);
  return variant ? strcmp(variant, "4ge") != 0 : -1;
 }
 int test_install(int fd, const unsigned char *bundle, const unsigned char *current) {
  struct tyf_payload selected;
  fault = erases = 0;
- if (!select_board(bundle, current, &selected)) return -1;
+ if (!select_boot_profile(bundle, current, &selected)) return -1;
  return write_fips(fd, selected.data);
 }
 ''')
