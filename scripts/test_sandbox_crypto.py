@@ -31,7 +31,11 @@ body = recovery[recovery.index("static int verify_fit"):recovery.index("int tyfz
 (testlib / "fit-check.c").write_text(includes.replace("#include <ubi_uboot.h>\n", "") + body)
 shutil.copy2(ROOT / "overlay/board/realtek/tyfza1/boot-config.c", testlib / "boot-config.c")
 shutil.copy2(ROOT / "tests/sandbox_fit_command.c", testlib / "fit-command.c")
-(testlib / "Makefile").write_text("obj-y += formats.o certificates.o certificate-crypto.o test-command.o ttl-command.o fit-check.o boot-config.o fit-command.o\n")
+boot = (ROOT / "overlay/board/realtek/tyfza1/tyfza1.c").read_text()
+boot = boot[boot.index("static int tyfza1_boot("):boot.index("U_BOOT_CMD(tyfboot")]
+(testlib / "boot-test.c").write_text((ROOT / "tests/sandbox_boot_io.h").read_text() +
+                                    boot + (ROOT / "tests/sandbox_boot_command.c").read_text())
+(testlib / "Makefile").write_text("obj-y += formats.o certificates.o certificate-crypto.o test-command.o ttl-command.o fit-check.o boot-config.o fit-command.o boot-test.o\n")
 makefile = source / "lib/Makefile"
 line = "obj-$(CONFIG_SANDBOX) += tyfza1-cert-test/\n"
 if line not in makefile.read_text():
@@ -146,6 +150,7 @@ print(json.dumps({'ttl_recovery_cases': len(ttl_rows), 'result': 'passed'}))
 import lzma
 fit_work = ROOT / "build/sandbox-fit"
 fit_work.mkdir(exist_ok=True)
+(fit_work / "script").write_text("setenv fixture_executed ${b_conf}\n")
 (fit_work / "kernel").write_bytes(b"TYFZA1 audit payload" * 64)
 for name, compatible in (("four", '"tianyi,tyfza1", "realtek,rtl9617c"'),
                          ("two", '"tianyi,tyfza1-2p5g", "tianyi,tyfza1", "realtek,rtl9617c"'),
@@ -157,10 +162,11 @@ for name, compatible in (("four", '"tianyi,tyfza1", "realtek,rtl9617c"'),
     dt.with_suffix('.lzma').write_bytes(lzma.compress(dt.read_bytes(), format=lzma.FORMAT_ALONE))
 
 
-def make_fit(name, comp="none", foreign=False, omit=False):
+def make_fit(name, comp="none", foreign=False, omit=False, scripted=False):
     ext = "lzma" if comp == "lzma" else "dtb"
     second = "foreign" if foreign else "two"
     text = "/dts-v1/; / { description = \"TYFZA1 audit\"; #address-cells = <1>; images { "
+    if scripted: text += 'script { data = /incbin/("script"); type = "script"; arch = "arm64"; compression = "none"; hash { algo = "sha256"; }; };'
     text += 'kernel { data = /incbin/("kernel"); type = "kernel"; arch = "arm64"; os = "linux"; compression = "none"; hash { algo = "sha256"; }; };'
     for node, file in (("four", "four"), ("two", second)):
         text += f'{node} {{ data = /incbin/("{file}.{ext}"); type = "flat_dt"; arch = "arm64"; compression = "{comp}"; hash {{ algo = "sha256"; }}; }};'
@@ -191,3 +197,28 @@ for label,path,conf,ok in [("unaligned-four",raw,"conf-1",True),
     fit_cases.append({"case":label,"result":"passed","expected_accept":ok})
 (ROOT / "build/sandbox-fit-results.json").write_text(json.dumps(fit_cases,indent=2)+"\n")
 print(json.dumps({"fit_cases":len(fit_cases),"result":"passed"}))
+
+boot_raw = make_fit("boot-raw", scripted=True)
+boot_compressed = make_fit("boot-compressed", "lzma", scripted=True)
+boot_bad = bytearray(boot_raw.read_bytes()); boot_bad[boot_bad.index(b"TYFZA1 audit payload")] ^= 1
+boot_corrupt = fit_work / "boot-corrupt.itb"; boot_corrupt.write_bytes(boot_bad)
+boot_cases=[]
+for label,path,conf,slot,used,read_error,ok in [
+        ("static-four",boot_raw,"conf-1","0",boot_raw.stat().st_size,0,True),
+        ("static-two",boot_compressed,"conf-0","1",boot_compressed.stat().st_size,0,True),
+        ("dynamic-padding",boot_raw,"conf-1","1",0x60e000,0,True),
+        ("truncated-volume",boot_raw,"conf-1","0",boot_raw.stat().st_size-1,0,False),
+        ("read-failure",boot_raw,"conf-1","0",boot_raw.stat().st_size,1,False),
+        ("corrupt-data",boot_corrupt,"conf-1","0",boot_corrupt.stat().st_size,0,False),
+        ("unconfigured",boot_raw,"","0",boot_raw.stat().st_size,0,False),
+        ("invalid-slot",boot_raw,"conf-1","2",boot_raw.stat().st_size,0,False)]:
+    size=path.stat().st_size
+    command=(f'host load hostfs - 1000000 {path}; setenv tyf_bootconf {conf}; '
+             f'setenv sw_commit {slot}; tyfbfixture 1000000 {size:x} {used:x} {read_error}')
+    result=subprocess.run([str(binary),'-d',str(dtb),'-c',command],text=True,capture_output=True,timeout=30)
+    expected=(f'TYF BOOT OK read={size:x} volume=ubi_k{slot} script={conf}' if ok else 'TYF BOOT REJECT')
+    if expected not in result.stdout or (not ok and 'script=none' not in result.stdout):
+        raise RuntimeError(label+"\n"+result.stdout+result.stderr)
+    boot_cases.append({"case":label,"result":"passed","expected_boot":ok})
+(ROOT / "build/sandbox-boot-results.json").write_text(json.dumps(boot_cases,indent=2)+"\n")
+print(json.dumps({"boot_cases":len(boot_cases),"result":"passed"}))

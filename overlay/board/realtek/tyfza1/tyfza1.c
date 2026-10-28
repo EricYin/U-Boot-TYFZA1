@@ -8,6 +8,8 @@
 #include <button.h>
 #include <command.h>
 #include <net/httpd.h>
+#include <mapmem.h>
+#include <linux/libfdt.h>
 #include <ubi_uboot.h>
 #include <tyfza1_recovery.h>
 #include <asm/global_data.h>
@@ -110,19 +112,37 @@ static int tyfza1_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const ar
 	const char *conf = tyfza1_boot_config();
 	int slot = committed && !strcmp(committed, "1");
 	char volume[16];
+	struct fdt_header header;
+	size_t used, size;
+	void *image;
+	int ret;
 
 	if (!conf) {
 		puts("Select and save the OpenWrt boot configuration in web recovery first.\n");
 		return CMD_RET_FAILURE;
 	}
-	if (env_set("b_conf", conf)) return CMD_RET_FAILURE;
+	if (committed && strcmp(committed, "0") && strcmp(committed, "1"))
+		return CMD_RET_FAILURE;
 	if (ubi_part("ubi_device", NULL))
 		return CMD_RET_FAILURE;
 	snprintf(volume, sizeof(volume), "ubi_k%d", slot);
-	env_set("root_mtd", slot ? "31:12" : "31:9");
-	env_set("unzip_src", "0x05000000");
-	/* The existing signed boot script uses root_mtd and b_conf for both boards. */
-	if (run_commandf("ubi read 0x05000000 %s 0x600000", volume))
+	if (ubi_volume_get_size(volume, &used, NULL) || used < sizeof(header) ||
+	    ubi_volume_read_quiet(volume, (char *)&header, 0, sizeof(header)) ||
+	    fdt_magic(&header) != FDT_MAGIC)
+		return CMD_RET_FAILURE;
+	size = fdt_totalsize(&header);
+	/* Static volumes expose only written data; dynamic volumes include padding. */
+	if (size < sizeof(header) || size > used || size > 0x600000)
+		return CMD_RET_FAILURE;
+	image = map_sysmem(0x05000000, size);
+	ret = ubi_volume_read_quiet(volume, image, 0, size);
+	unmap_sysmem(image);
+	if (ret || tyfza1_check_fit(0x05000000, size))
+		return CMD_RET_FAILURE;
+	/* The existing boot script uses root_mtd and b_conf for both boards. */
+	if (env_set("b_conf", conf) ||
+	    env_set("root_mtd", slot ? "31:12" : "31:9") ||
+	    env_set("unzip_src", "0x05000000"))
 		return CMD_RET_FAILURE;
 	return run_command("source 0x05000000:script", 0);
 }

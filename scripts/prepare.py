@@ -113,6 +113,8 @@ def main():
     text = text[:begin] + "\tpriv->active_port = 0;\n\tpriv->active_scan = 1;\n" + text[end:]
     text = text.replace("\tchar\t\t\t*buf;\n\tint portid, active_scan;\n", "")
     ni.write_text(text)
+    replace(ni, "static int cortina_ni_start(struct udevice *dev)", "static void init_port_map(struct cortina_ni_priv *priv);\n\nstatic int cortina_ni_start(struct udevice *dev)")
+    replace(ni, "\tif (!priv->is_phyinited) {\n\t\tint i, val;", "\tif (!priv->is_phyinited) {\n\t\tint i, val;\n\t\t/* Retry from the physical map, not last attempt's disabled ports. */\n\t\tinit_port_map(priv);")
     replace(board / "vendor/eth_ni.c", "static int cortina_ni_start(struct udevice *dev)", '#include "../ni-board.inc"\n\nstatic int cortina_ni_start(struct udevice *dev)')
     replace(board / "vendor/eth_ni.c", "static void ni_auto_scan_active_port", "static int tyf_ni_phy_status(struct phy_device *phy);\n\nstatic void ni_auto_scan_active_port")
     replace(board / "vendor/eth_ni.c", "\t\tphy_startup(phydev);", "\t\ttyf_ni_phy_status(phydev);")
@@ -192,6 +194,17 @@ def main():
     # TCP flow control includes software buffering; it is not an XRAM ring limit.
     opts = dest / "lib/lwip/u-boot/lwipopts.h"
     shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/u-boot/lwipopts.h", opts)
+    # A peer RST bypasses the normal close callback. Release partial POST state.
+    http_core = dest / "lib/lwip/lwip/src/apps/http/httpd.c"
+    shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/lwip/src/apps/http/httpd.c", http_core)
+    replace(http_core, '  LWIP_DEBUGF(HTTPD_DEBUG, ("http_err: %s\\n", lwip_strerr(err)));',
+            '  LWIP_DEBUGF(HTTPD_DEBUG, ("http_err: %s\\n", lwip_strerr(err)));\n'
+            '#if LWIP_HTTPD_SUPPORT_POST\n'
+            '  if (hs != NULL && hs->post_content_len_left != 0) {\n'
+            '    http_uri_buf[0] = 0;\n'
+            '    httpd_post_finished(hs, http_uri_buf, LWIP_HTTPD_URI_BUF_LEN);\n'
+            '  }\n'
+            '#endif')
     # Preserve the complete frontend while reducing the two-FIP flash footprint.
     http = dest / "net/lwip/httpd.c"
     shutil.copy2(reference_path := ROOT / "sources" / lock["reference"]["directory"] / "net/lwip/httpd.c", http)

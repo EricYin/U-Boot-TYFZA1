@@ -15,8 +15,9 @@ class NiStartTests(unittest.TestCase):
         vendor = (ROOT / 'build/u-boot/board/realtek/tyfza1/vendor/eth_ni.c').read_text()
         bodies = ''
         for signature in ('static inline int is_valid_port(', 'static void ni_auto_scan_active_port(',
-                          'static struct phy_device *__get_curr_phydev(', 'static int cortina_ni_start('):
+                          'static struct phy_device *__get_curr_phydev(', 'static void init_port_map(', 'static int cortina_ni_start('):
             begin = vendor.index(signature)
+            if signature == 'static void init_port_map(': begin = vendor.index(signature, begin + 1)
             bodies += vendor[begin:vendor.index('\n}', begin) + 2] + '\n'
         prelude = r'''
 #include <stdbool.h>
@@ -96,6 +97,7 @@ int run(int two,unsigned int absent,unsigned int config,unsigned int rd,unsigned
  struct udevice dev={&priv};return cortina_ni_start(&dev);
 }
 void drop(int n){drop_after=n;}
+void recover_faults(void){missing=config_errors=read_errors=write_errors=0;}
 int restart(unsigned int up){links=up;struct udevice dev={&priv};return cortina_ni_start(&dev);}
 int metric(int key){
  switch(key){case 0:return enabled;case 1:return priv.active_port;case 2:return priv.is_phyinited;
@@ -115,6 +117,14 @@ int metric(int key){
 
     def start(self, two=1, missing=0, config=0, read=0, write=0, up=1, active=0, scan=1):
         return self.lib.run(two, missing, config, read, write, up, active, scan)
+
+    def test_retry_after_transient_all_phy_failure_reprobes_internal_ports(self):
+        for failure in ('missing', 'config', 'read', 'write'):
+            self.assertEqual(self.start(**{failure:15}),-19)
+            self.lib.recover_faults()
+            self.assertEqual(self.lib.restart(1 << 3),0)
+            self.assertEqual(self.lib.metric(0),3)
+            self.assertEqual(self.lib.metric(4),-1)
 
     def test_link_lost_after_scan_waits_instead_of_failing_start(self):
         self.lib.drop(2)

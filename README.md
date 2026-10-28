@@ -252,6 +252,8 @@ python3 scripts/test_sandbox_crypto.py
 
 历史版本的实机记录保存在 [原始记录](evidence/hardware-validation-20261018.json)，不代表本次修订已经完成实机验收。网页上传的 TCP 窗口复核、限速回归和性能验证边界见 [上传说明](docs/UPLOAD-PERFORMANCE.md)。
 
+启动、网口重试和 TCP 中断清理的后续修复见 [审查记录](docs/BOOT-NET-TRANSFER-REVIEW.md)。
+
 ## 来源与许可
 
 - [pbs05/uboot-an758x](https://github.com/pbs05/uboot-an758x)：恢复功能与网页前端参考。
