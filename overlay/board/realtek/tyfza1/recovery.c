@@ -72,6 +72,12 @@ static int verify_fit(const struct tyf_payload *image)
 		size = output_size;
 	} else if (comp != IH_COMP_NONE) {
 		goto out;
+	} else if ((uintptr_t)data & 7) {
+		/* FIT properties are 4-byte aligned; libfdt requires an 8-byte DT. */
+		dtb = malloc(size);
+		if (!dtb) return -ENOMEM;
+		memcpy(dtb, data, size);
+		data = dtb;
 	}
 	if (fdt_check_full(data, size)) goto out;
 	ret = fdt_node_check_compatible(data, 0, "tianyi,tyfza1");

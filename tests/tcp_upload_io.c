@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Exercise the pinned lwIP input/ACK path with a finite NI receive ring.
- * The CPU is paused during each sender burst; this is a loss reproduction,
- * not a timing model of the Cortex-A55 or a measured throughput benchmark. */
+/* Actual pinned lwIP input/receive/ACK path. Python supplies virtual wire/CPU
+ * timing and a window-respecting sender. No physical throughput is measured. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "lwip/init.h"
+#include "lwip/timeouts.h"
 #include "lwip/tcp.h"
 #include "lwip/priv/tcp_priv.h"
 #include "lwip/ip4.h"
@@ -14,8 +14,8 @@
 #include "lwip/prot/ip4.h"
 
 static struct netif nic;
-static u32_t received, announced, acknowledged;
-u32_t sys_now(void) { return 0; }
+static u32_t received, announced, acknowledged, now_ms, ack_count;
+u32_t sys_now(void) { return now_ms; }
 static err_t output(struct netif *n, struct pbuf *p, const ip4_addr_t *dst)
 {
 	unsigned char buf[1600];
@@ -24,6 +24,7 @@ static err_t output(struct netif *n, struct pbuf *p, const ip4_addr_t *dst)
 	struct tcp_hdr *tcp = (void *)(buf + IPH_HL_BYTES((struct ip_hdr *)buf));
 	announced = (u32_t)lwip_ntohs(tcp->wnd) << TCP_RCV_SCALE;
 	acknowledged = lwip_ntohl(tcp->ackno);
+	ack_count++;
 	return ERR_OK;
 }
 static err_t accepted(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t error)
@@ -35,7 +36,7 @@ static err_t accepted(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t erro
 	pbuf_free(p);
 	return ERR_OK;
 }
-static void packet(u32_t seq, u16_t length)
+void packet(u32_t seq, u16_t length)
 {
 	struct pbuf *p = pbuf_alloc(PBUF_RAW, 40 + length, PBUF_RAM);
 	if (!p) abort();
@@ -57,7 +58,7 @@ static void packet(u32_t seq, u16_t length)
 	IPH_CHKSUM_SET(ip, inet_chksum(ip,20));
 	ip4_input(p,&nic);
 }
-int main(void)
+void setup(void)
 {
 	lwip_init();
 	IP_ADDR4(&nic.ip_addr,192,168,0,1);
@@ -74,22 +75,19 @@ int main(void)
 	pcb->snd_nxt=pcb->lastack=pcb->snd_lbb=1;pcb->snd_wnd=65535;
 	pcb->flags|=TF_WND_SCALE;pcb->rcv_scale=TCP_RCV_SCALE;
 	tcp_recv(pcb,accepted);tcp_active_pcbs=pcb;
-	unsigned int dropped=0, frames=0, rounds=0;u32_t seq=1;
 	announced=TCP_WND;acknowledged=1;
-	for (rounds=0; rounds<100; rounds++) {
-		unsigned int burst=announced/1460;
-		if (burst>10)burst=10; /* Ordinary initial congestion window. */
-		if (!burst)abort();
-		unsigned int slot=(1518+16+7)&~7U;
-		unsigned int capacity=(NI_TEST_RX_BYTES-8)/slot;
-		unsigned int keep=burst<capacity?burst:capacity;
-		dropped+=burst-keep;frames+=burst;
-		for(unsigned int i=0;i<keep;i++)packet(seq+i*1460,1460);
-		seq+=burst*1460;
-		if(dropped)break;
-		if(acknowledged!=seq){fprintf(stderr,"ACK did not advance: %u/%u\n",acknowledged,seq);return 1;}
+}
+
+void advance(u32_t ms) { now_ms=ms; sys_check_timeouts(); }
+u32_t metric(int key)
+{
+	switch (key) {
+	case 0: return received;
+	case 1: return acknowledged;
+	case 2: return announced;
+	case 3: return ack_count;
+	case 4: return TCP_WND;
+	case 5: return NI_TEST_RX_BYTES;
 	}
-	printf("{\"window\":%u,\"frames\":%u,\"dropped\":%u,\"received\":%u,\"ack\":%u}\n",TCP_WND,frames,dropped,received,acknowledged);
-	if (!received) return 1;
 	return 0;
 }

@@ -24,7 +24,14 @@ for name in ("formats.h", "formats.c", "certificates.h", "certificates.c", "cert
     shutil.copy2(ROOT / "overlay/board/realtek/tyfza1" / name, testlib / name)
 shutil.copy2(ROOT / "tests/sandbox_cert_command.c", testlib / "test-command.c")
 shutil.copy2(ROOT / "tests/sandbox_ttl_command.c", testlib / "ttl-command.c")
-(testlib / "Makefile").write_text("obj-y += formats.o certificates.o certificate-crypto.o test-command.o ttl-command.o\n")
+# Execute the production FIT/configuration checker with real U-Boot image APIs.
+recovery = (ROOT / "overlay/board/realtek/tyfza1/recovery.c").read_text()
+includes = recovery[:recovery.index("static int volume_verify")]
+body = recovery[recovery.index("static int verify_fit"):recovery.index("int tyfza1_boot_upload")]
+(testlib / "fit-check.c").write_text(includes.replace("#include <ubi_uboot.h>\n", "") + body)
+shutil.copy2(ROOT / "overlay/board/realtek/tyfza1/boot-config.c", testlib / "boot-config.c")
+shutil.copy2(ROOT / "tests/sandbox_fit_command.c", testlib / "fit-command.c")
+(testlib / "Makefile").write_text("obj-y += formats.o certificates.o certificate-crypto.o test-command.o ttl-command.o fit-check.o boot-config.o fit-command.o\n")
 makefile = source / "lib/Makefile"
 line = "obj-$(CONFIG_SANDBOX) += tyfza1-cert-test/\n"
 if line not in makefile.read_text():
@@ -134,3 +141,53 @@ for label, boot, script, action, fault, state, erased, message in cases:
     'cases': ttl_rows,
 }, indent=2) + '\n')
 print(json.dumps({'ttl_recovery_cases': len(ttl_rows), 'result': 'passed'}))
+
+# FIT selection must depend on the explicit Linux setting, not stale board vars.
+import lzma
+fit_work = ROOT / "build/sandbox-fit"
+fit_work.mkdir(exist_ok=True)
+(fit_work / "kernel").write_bytes(b"TYFZA1 audit payload" * 64)
+for name, compatible in (("four", '"tianyi,tyfza1", "realtek,rtl9617c"'),
+                         ("two", '"tianyi,tyfza1-2p5g", "tianyi,tyfza1", "realtek,rtl9617c"'),
+                         ("foreign", '"other,board"')):
+    dts = fit_work / (name + ".dts")
+    dts.write_text('/dts-v1/; / { compatible = ' + compatible + '; };\n')
+    dt = fit_work / (name + ".dtb")
+    subprocess.run(["dtc", "-I", "dts", "-O", "dtb", "-o", str(dt), str(dts)], check=True)
+    dt.with_suffix('.lzma').write_bytes(lzma.compress(dt.read_bytes(), format=lzma.FORMAT_ALONE))
+
+
+def make_fit(name, comp="none", foreign=False, omit=False):
+    ext = "lzma" if comp == "lzma" else "dtb"
+    second = "foreign" if foreign else "two"
+    text = "/dts-v1/; / { description = \"TYFZA1 audit\"; #address-cells = <1>; images { "
+    text += 'kernel { data = /incbin/("kernel"); type = "kernel"; arch = "arm64"; os = "linux"; compression = "none"; hash { algo = "sha256"; }; };'
+    for node, file in (("four", "four"), ("two", second)):
+        text += f'{node} {{ data = /incbin/("{file}.{ext}"); type = "flat_dt"; arch = "arm64"; compression = "{comp}"; hash {{ algo = "sha256"; }}; }};'
+    text += '}; configurations { default = "conf-1"; conf-1 { kernel = "kernel"; fdt = "four"; };'
+    if not omit: text += 'conf-0 { kernel = "kernel"; fdt = "two"; };'
+    text += '}; };'
+    (fit_work / (name + ".its")).write_text(text)
+    subprocess.run([str(ROOT / "build/tyfza1/tools/mkimage"), "-f", name+".its", name+".itb"], cwd=fit_work, check=True, stdout=subprocess.DEVNULL)
+    return fit_work / (name+".itb")
+
+raw = make_fit("raw")
+compressed = make_fit("compressed", "lzma")
+foreign = make_fit("foreign", foreign=True)
+missing = make_fit("missing", omit=True)
+bad = bytearray(raw.read_bytes()); at=bad.index(b"TYFZA1 audit payload"); bad[at]^=1
+corrupt = fit_work / "corrupt.itb"; corrupt.write_bytes(bad)
+fit_cases=[]
+for label,path,conf,ok in [("unaligned-four",raw,"conf-1",True),
+        ("unaligned-two",raw,"conf-0",True), ("compressed-four",compressed,"conf-1",True),
+        ("compressed-two",compressed,"conf-0",True), ("unset-ignores-old-auto",raw,"",False),
+        ("invalid-setting",raw,"conf-2",False), ("missing-configuration",missing,"conf-0",False),
+        ("foreign-selected-dt",foreign,"conf-0",False), ("corrupt-hash",corrupt,"conf-1",False)]:
+    command = (f'host load hostfs - 1000000 {path}; setenv b_conf conf-0; setenv board_variant 2p5g; '
+               f'setenv tyf_bootconf {conf}; tyffit 1000000 {path.stat().st_size:x}')
+    result=subprocess.run([str(binary),'-d',str(dtb),'-c',command],text=True,capture_output=True,timeout=30)
+    expected="TYF FIT OK (0)" if ok else "TYF FIT REJECT"
+    if expected not in result.stdout: raise RuntimeError(label+"\n"+result.stdout+result.stderr)
+    fit_cases.append({"case":label,"result":"passed","expected_accept":ok})
+(ROOT / "build/sandbox-fit-results.json").write_text(json.dumps(fit_cases,indent=2)+"\n")
+print(json.dumps({"fit_cases":len(fit_cases),"result":"passed"}))

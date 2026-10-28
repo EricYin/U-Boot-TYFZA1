@@ -16,7 +16,7 @@ int tyfza1_save_boot_config(const char *conf)
 	char old[7];
 	int ret;
 	if (!conf || (strcmp(conf, "conf-0") && strcmp(conf, "conf-1"))) return -EINVAL;
-	if (previous && !strcmp(previous, conf)) return 0;
+	/* The same value may have been set only in RAM from the console. */
 	if (previous) strcpy(old, previous);
 	ret = env_set("tyf_bootconf", conf);
 	if (!ret) ret = env_save();

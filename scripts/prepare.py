@@ -188,11 +188,10 @@ def main():
     (dest / "include/tyfza1_build.h").write_text(
         f"#define TYFZA1_PROJECT_VERSION {json.dumps(version)}\n"
         f"#define TYFZA1_BUILD_COMMIT {json.dumps(commit)}\n")
-    # The NI XRAM RX ring is 6 KiB. Bound each TCP sender to two full frames,
-    # leaving room for ARP/DHCP/control traffic while the CPU drains the ring.
+    # Restore the pinned stack options on incremental builds as well.
+    # TCP flow control includes software buffering; it is not an XRAM ring limit.
     opts = dest / "lib/lwip/u-boot/lwipopts.h"
     shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/u-boot/lwipopts.h", opts)
-    replace(opts, "#define TCP_RCV_SCALE                   0x7", "#define TCP_RCV_SCALE                   0")
     # Preserve the complete frontend while reducing the two-FIP flash footprint.
     http = dest / "net/lwip/httpd.c"
     shutil.copy2(reference_path := ROOT / "sources" / lock["reference"]["directory"] / "net/lwip/httpd.c", http)

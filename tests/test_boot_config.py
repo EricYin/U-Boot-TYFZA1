@@ -79,6 +79,16 @@ int metric(int n){return n==0?saved:n==1?(!inferred[0]&&!variant[0]):n==2?writes
             self.assertEqual(self.lib.tyfza1_boot_config(),b'conf-1')
             self.assertEqual(self.lib.metric(0),0)
 
+    def test_save_persists_a_selection_already_present_only_in_ram(self):
+        self.lib.reset(b'conf-1',0)  # e.g. setenv from the console, without saveenv
+        self.assertEqual(self.lib.tyfza1_save_boot_config(b'conf-1'),0)
+        self.assertEqual(self.lib.metric(0),1)
+
+    def test_same_value_save_still_reports_nand_failure(self):
+        self.lib.reset(b'conf-1',1)
+        self.assertEqual(self.lib.tyfza1_save_boot_config(b'conf-1'),-5)
+        self.assertEqual(self.lib.tyfza1_boot_config(),b'conf-1')
+
     def test_save_failure_restores_previous_selection(self):
         for old in (b'',b'conf-1'):
             self.lib.reset(old,1)

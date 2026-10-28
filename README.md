@@ -250,7 +250,7 @@ python3 scripts/test_sandbox_crypto.py
 
 本次 1.6 修订完成离线构建和生产代码测试；未刷机、重启或做新固件实机测速。两种原厂 boot 均通过引导兼容与签名校验，四个内部端口的 10/100/1000 Mbps、双工和 MAC 设置已与固定版本 Realtek 源码逐项比较。
 
-历史版本的实机记录保存在 [原始记录](evidence/hardware-validation-20261018.json)，不代表本次修订已经完成实机验收。网页上传的突发溢出复现、修复与性能验证边界见 [上传说明](docs/UPLOAD-PERFORMANCE.md)。
+历史版本的实机记录保存在 [原始记录](evidence/hardware-validation-20261018.json)，不代表本次修订已经完成实机验收。网页上传的 TCP 窗口复核、限速回归和性能验证边界见 [上传说明](docs/UPLOAD-PERFORMANCE.md)。
 
 ## 来源与许可
 
