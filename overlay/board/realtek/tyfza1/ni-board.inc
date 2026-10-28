@@ -18,7 +18,7 @@ static int tyf_ni_phy_status(struct phy_device *phy)
 	return value;
 }
 
-static void tyf_gpio_output(unsigned int pin, bool value)
+static int tyf_gpio_output(unsigned int pin, bool value)
 {
 	unsigned long bank = 0xf43292c0 + (pin / 32) * 0x24;
 	unsigned long mux = 0xf4320100 + (pin / 32) * 4;
@@ -26,32 +26,57 @@ static void tyf_gpio_output(unsigned int pin, bool value)
 	setbits_le32(mux, bit);
 	clrsetbits_le32(bank + 4, bit, value ? bit : 0);
 	clrbits_le32(bank, bit);
+	if (!(readl(mux) & bit) || (readl(bank) & bit) ||
+	    !!(readl(bank + 4) & bit) != value) return -EIO;
+	return 0;
 }
 
 int tyfza1_board_id(void)
 {
 	u16 high, low;
 	u32 id;
+	ulong start;
+	bool only_absent = true;
+	u32 previous = 0;
 	int ret;
 
-	/* Use the OEM PHY reset/enable sequence on both boards, preserving MDC. */
-	setbits_le32(0xf4329118, BIT(0));
-	tyf_gpio_output(128, false);
+	/* Route external MDIO and use 62.5 MHz / (2 * 32), below 1 MHz. */
+	setbits_le32(0xf43200f4, BIT(11));
+	clrsetbits_le32(0xf4329118, 0xffff0001, 31U << 16 | BIT(0));
+	if (!(readl(0xf43200f4) & BIT(11)) ||
+	    (readl(0xf4329118) & 0xffff0001) != (31U << 16 | BIT(0)))
+		return -EIO;
+	/* Use the OEM PHY reset/enable sequence on both boards. */
+	ret = tyf_gpio_output(128, false);
+	if (ret) return ret;
 	mdelay(30);
-	tyf_gpio_output(128, true);
+	ret = tyf_gpio_output(128, true);
+	if (ret) return ret;
 	mdelay(300);
-	tyf_gpio_output(14, true);
+	ret = tyf_gpio_output(14, true);
+	if (ret) return ret;
 	mdelay(300);
-	ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID1, &high);
-	if (!ret) ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID2, &low);
-	if (ret) {
-		printf("TYFZA1: board identification MDIO error %d\n", ret);
-		return ret;
+	/* A completed controller transaction does not mean the PHY answered.
+	 * Allow a full discovery window before deciding the footprint is empty. */
+	start = get_timer(0);
+	do {
+		ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID1, &high);
+		if (!ret) ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID2, &low);
+		if (ret) return ret;
+		id = (u32)high << 16 | low;
+		if (id != 0xffffffff) only_absent = false;
+		if ((id & 0xfffffff0) == 0x001cc840 && id == previous) {
+			printf("TYFZA1: RTL8221B %08x, 2p5g\n", id);
+			return 0;
+		}
+		previous = id;
+		mdelay(10);
+	} while (get_timer(start) < 1000);
+	if (only_absent) {
+		puts("TYFZA1: no external PHY after discovery, 4ge\n");
+		return 1;
 	}
-	id = (u32)high << 16 | low;
-	printf("TYFZA1: external PHY ID %08x\n", id);
-	if ((id & 0xfffffff0) == 0x001cc840) return 0; /* RTL8221B: 2p5g, conf-0 */
-	if (id == 0xffffffff) return 1; /* No external PHY: 4ge, conf-1 */
+	printf("TYFZA1: unstable or unsupported external PHY %08x\n", id);
 	return -ENODEV;
 }
 

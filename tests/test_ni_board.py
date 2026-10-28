@@ -32,6 +32,7 @@ class NiBoardTests(unittest.TestCase):
 #include <stdio.h>
 typedef uint32_t u32;
 typedef uint16_t u16;
+typedef unsigned long ulong;
 #define MDIO_MMD_PMAPMD 1
 #define MII_PHYSID1 2
 #define MII_PHYSID2 3

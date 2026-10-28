@@ -96,6 +96,7 @@ int board_late_init(void)
 	/* Identify the fitted PHY before selecting LAN ports or a system DT. */
 	board = tyfza1_board_id();
 	if (board < 0) {
+		printf("TYFZA1: board identification failed (%d)\n", board);
 		env_set("bootcmd", "tyfrecovery");
 		env_set("board_variant", "unknown");
 		env_set("b_conf", NULL);
