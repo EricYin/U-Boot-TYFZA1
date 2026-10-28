@@ -31,6 +31,13 @@ class NiBoardTests(unittest.TestCase):
 #include <errno.h>
 #include <stdio.h>
 typedef uint32_t u32;
+typedef uint16_t u16;
+#define MDIO_MMD_PMAPMD 1
+#define MII_PHYSID1 2
+#define MII_PHYSID2 3
+static int __ca_mdio_c45_read(unsigned int addr,unsigned int devad,unsigned short reg,unsigned short *data) {
+ (void)addr;(void)devad;*data=reg==2?0x001c:0xc848;return 0;
+}
 #define BIT(n) (1U<<(n))
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof(a[0]))
 #define __iomem
@@ -140,13 +147,13 @@ int poll(unsigned int delta,int error){now+=delta;sync_error=error;return tyf_ni
                 self.rows.append({"speed": speed, "seed": seed, "writes": len(native),
                     "trace_sha256": hashlib.sha256(json.dumps(native).encode()).hexdigest()})
 
-    def test_only_2p5g_board_powers_and_resets_external_phy(self):
+    def test_only_2p5g_board_enables_port4_and_s3_without_resetting_detected_phy(self):
         self.lib.reset(0xa5a5a5a5); self.assertEqual(self.lib.prepare(0), 0)
         self.assertEqual(self.lib.write_count(), 0); self.assertEqual(self.lib.metric(2), -1)
         self.lib.reset(0xa5a5a5a5); self.assertEqual(self.lib.prepare(1), 0)
-        self.assertEqual(self.lib.metric(2), 7); self.assertEqual(self.lib.metric(0), 630)
-        self.assertEqual(self.lib.get_value(0xf4329354)&1, 1)
-        self.assertEqual(self.lib.get_value(0xf43292c4)&(1<<14), 1<<14)
+        self.assertEqual(self.lib.metric(2), 7); self.assertEqual(self.lib.metric(0), 0)
+        self.assertEqual(self.lib.get_value(0xf4329354), 0xa5a5a5a5)
+        self.assertEqual(self.lib.get_value(0xf43292c4), 0xa5a5a5a5)
         self.assertEqual(self.lib.get_value(0xf432036c), (0xa5a5a5a5|0xc0080000)&~0x6020)
         self.assertEqual(self.lib.get_value(0xf460001c), 0x5359)
 

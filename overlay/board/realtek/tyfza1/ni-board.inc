@@ -28,6 +28,33 @@ static void tyf_gpio_output(unsigned int pin, bool value)
 	clrbits_le32(bank, bit);
 }
 
+int tyfza1_board_id(void)
+{
+	u16 high, low;
+	u32 id;
+	int ret;
+
+	/* Use the OEM PHY reset/enable sequence on both boards, preserving MDC. */
+	setbits_le32(0xf4329118, BIT(0));
+	tyf_gpio_output(128, false);
+	mdelay(30);
+	tyf_gpio_output(128, true);
+	mdelay(300);
+	tyf_gpio_output(14, true);
+	mdelay(300);
+	ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID1, &high);
+	if (!ret) ret = __ca_mdio_c45_read(7, MDIO_MMD_PMAPMD, MII_PHYSID2, &low);
+	if (ret) {
+		printf("TYFZA1: board identification MDIO error %d\n", ret);
+		return ret;
+	}
+	id = (u32)high << 16 | low;
+	printf("TYFZA1: external PHY ID %08x\n", id);
+	if ((id & 0xfffffff0) == 0x001cc840) return 0; /* RTL8221B: 2p5g, conf-0 */
+	if (id == 0xffffffff) return 1; /* No external PHY: 4ge, conf-1 */
+	return -ENODEV;
+}
+
 static int tyf_ni_board_prepare(struct cortina_ni_priv *priv)
 {
 	const char *variant = env_get("board_variant");
@@ -39,14 +66,6 @@ static int tyf_ni_board_prepare(struct cortina_ni_priv *priv)
 	priv->maps[3].phy_id = -1;
 	priv->maps[4].phy_id = 7;
 	priv->maps[4].sds_mode = AAL_SDS_MODE_SGMII;
-	/* Preserve the MDC divider, but explicitly select software MDIO control. */
-	setbits_le32(0xf4329118, BIT(0));
-	tyf_gpio_output(128, false);
-	mdelay(30);
-	tyf_gpio_output(128, true);
-	mdelay(300);
-	tyf_gpio_output(14, true);
-	mdelay(300);
 	/* Original S3 power and mux sequence; preserve adjacent USB/PCIe controls. */
 	value = readl(0xf43200c4);
 	writel((value | BIT(25)) & ~BIT(26), 0xf43200c4);

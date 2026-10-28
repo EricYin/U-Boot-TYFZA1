@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
 obj-y += tyfza1.o
-obj-y += board-id.o
 obj-y += board-ui.o
 obj-y += formats.o
 obj-y += recovery.o

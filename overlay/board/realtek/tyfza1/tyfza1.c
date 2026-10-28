@@ -83,8 +83,7 @@ void board_preboot_os(void)
 
 int board_late_init(void)
 {
-	u32 mask = 7U << 15;
-	int strap;
+	int board;
 
 	/* Match the stock success handoff to BL2/BL31 and their watchdog state. */
 	writel(0, PER_WDT_CTRL);
@@ -94,22 +93,16 @@ int board_late_init(void)
 	env_set("mtdids", CONFIG_MTDIDS_DEFAULT);
 	env_set("mtdparts", CONFIG_MTDPARTS_DEFAULT);
 
-	/* Prefer the preserved early firmware; a low GPIO alone is not a 2.5G ID. */
-	strap = tyfza1_board_id();
-	if (strap < 0) {
-		/* GPIO113:111, matching the original conf_match environment. */
-		setbits_le32(0xf432010c, mask);
-		setbits_le32(0xf432932c, mask);
-		strap = (readl(0xf4329334) >> 15) & 7;
-	}
-	if (strap > 1) {
+	/* Identify the fitted PHY before selecting LAN ports or a system DT. */
+	board = tyfza1_board_id();
+	if (board < 0) {
 		env_set("bootcmd", "tyfrecovery");
 		env_set("board_variant", "unknown");
 		env_set("b_conf", NULL);
 		return 0;
 	}
-	env_set("b_conf", strap ? "conf-1" : "conf-0");
-	env_set("board_variant", strap ? "4ge" : "2p5g");
+	env_set("b_conf", board ? "conf-1" : "conf-0");
+	env_set("board_variant", board ? "4ge" : "2p5g");
 	/* Existing OEM NAND environments must not replace the new recovery entry. */
 	env_set("bootcmd", "bootmenu 3");
 	env_set("bootmenu_0", "Start OpenWrt=tyfboot; tyfrecovery");

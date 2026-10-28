@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-only
-"""Run board detection and late init against real boot images and GPIO levels."""
+"""Execute physical discovery, real C45 transfers and late init in simulated MMIO."""
 import ctypes as C
 from pathlib import Path
-import struct
 import subprocess
 import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BOARD = ROOT / 'overlay/board/realtek/tyfza1'
-FIPS = (0x40000, 0x100000)
 
 
 class BoardIdTests(unittest.TestCase):
@@ -18,146 +16,140 @@ class BoardIdTests(unittest.TestCase):
     def setUpClass(cls):
         cls.work = tempfile.TemporaryDirectory()
         source = (BOARD / 'tyfza1.c').read_text()
-        late_init = source[source.index('int board_late_init('):source.index('static int tyfza1_boot(')]
-        identity = BOARD / 'board-id.c'
-        detector = '\n'.join(line for line in identity.read_text().splitlines()
-                             if not line.startswith('#include'))
+        late = source[source.index('int board_late_init('):source.index('static int tyfza1_boot(')]
+        source = (BOARD / 'ni-board.inc').read_text()
+        detector = source[source.index('static void tyf_gpio_output('):source.index('static int tyf_ni_board_prepare(')]
         prelude = r'''
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <errno.h>
-#include <openssl/sha.h>
-#include "formats.h"
-typedef uint32_t u32;
+typedef uint32_t u32,ca_uint32_t;
+typedef uint16_t u16,ca_uint16_t;
+typedef int ca_status_t;
+#define BIT(n) (1U << (n))
 #define PER_WDT_CTRL 0xf432901cUL
 #define GLOBAL_SCRATCH 0xf4329000UL
 #define DMA_SEC_SSP_FRAME_CTRL0 0xf4320000UL
+#define PER_MDIO_ADDR 0xf432911cUL
+#define PER_MDIO_WRDATA 0xf4329120UL
+#define PER_MDIO_RDDATA 0xf4329124UL
+#define PER_MDIO_CTRL 0xf4329128UL
+#define MDIO_MMD_PMAPMD 1
+#define MII_PHYSID1 2
+#define MII_PHYSID2 3
 #define CONFIG_MTDIDS_DEFAULT "nand0=nand0"
 #define CONFIG_MTDPARTS_DEFAULT "mtdparts=nand0:2m(boot),-(data)"
-#define CHUNKSZ_SHA256 65536
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
-#define IS_ERR(p) ((intptr_t)(p) < 0)
-#define malloc_cache_aligned malloc
 enum {TYFZA1_LEDS_HELD};
-struct mtd_info {size_t size;};
-static struct mtd_info mtd;
-static const unsigned char *flash;
-static int faults, strap, reads[2], gpio_reads;
 static bool reset_requested;
 static char variant[16], conf[16], bootcmd[32];
-void mtd_probe_devices(void) {}
-struct mtd_info *get_mtd_device_nm(const char *name) {
- return strcmp(name,"boot") || (faults & 1) ? (void *)(intptr_t)-ENODEV : &mtd;
+static u32 phy_id, address, control, regnum, datareg, seed;
+static unsigned int elapsed, reset_at, released_at, enabled_at;
+static unsigned int starts, clears, fail_phase, strap_reads, sequence_errors;
+static uintptr_t locations[64];static u32 values[64];static unsigned int writes;
+static unsigned int phases[4], registers[4];
+static u32 readl(uintptr_t reg) {
+ if(reg==0xf4329334UL){strap_reads++;return 0;}
+ if(reg==PER_MDIO_CTRL)return starts==fail_phase?control:control|1;
+ if(reg==PER_MDIO_RDDATA) {
+  if(elapsed < enabled_at+300000 || !enabled_at)sequence_errors++;
+  if(regnum!=2 && regnum!=3)sequence_errors++;
+  return regnum==2?phy_id>>16:phy_id&0xffff;
+ }
+ for(unsigned int i=writes;i>0;i--)if(locations[i-1]==reg)return values[i-1];
+ return seed;
 }
-void put_mtd_device(struct mtd_info *device) {(void)device;}
-int mtd_read(struct mtd_info *device, size_t offset, size_t size, size_t *done, void *out) {
- int copy = offset == TYF_FIP1_OFFSET;
- if (offset != TYF_FIP0_OFFSET && offset != TYF_FIP1_OFFSET) return -EINVAL;
- reads[copy]++;
- if (faults & (2 << copy)) return -EIO;
- if (offset > device->size || size > device->size - offset) return -EINVAL;
- *done = size - !!(faults & 8);
- memcpy(out,flash + offset,*done);
- return faults & 16 ? -EUCLEAN : 0;
+static void writel(u32 value,uintptr_t reg) {
+ if(reg==PER_MDIO_ADDR)address=value;
+ if(reg==PER_MDIO_WRDATA)datareg=value;
+ if(reg==PER_MDIO_CTRL) {
+  if(value==1){control&=~1U;clears++;}
+  if(value==128){
+   if(control&1)sequence_errors++;
+   if(starts<4){phases[starts]=address;registers[starts]=datareg;}
+   starts++;if(!(address & (3U<<18)))regnum=datareg;
+  }
+ }
+ if(reg==0xf4329354UL) {
+  if(!(value&1))reset_at=elapsed;
+  else {released_at=elapsed;if(released_at-reset_at<30000)sequence_errors++;}
+ }
+ if(reg==0xf43292c4UL && value&BIT(14)) {
+  enabled_at=elapsed;if(enabled_at-released_at<300000)sequence_errors++;
+ }
+ if(writes<64){locations[writes]=reg;values[writes++]=value;}
 }
-void sha256_csum_wd(const unsigned char *data, unsigned int size, unsigned char *out, unsigned int chunk) {
- (void)chunk;SHA256(data,size,out);
-}
-void writel(u32 value, uintptr_t address) {(void)value;(void)address;}
-void setbits_le32(uintptr_t address, u32 bits) {(void)address;(void)bits;}
-u32 readl(uintptr_t address) {(void)address;gpio_reads++;return (u32)strap << 15;}
-void tyfza1_recovery_leds(int state) {(void)state;}
-int env_set(const char *name, const char *value) {
- char *target = !strcmp(name,"board_variant") ? variant :
-                !strcmp(name,"b_conf") ? conf : !strcmp(name,"bootcmd") ? bootcmd : NULL;
- if(target)strcpy(target,value ? value : "");
+static void setbits_le32(uintptr_t reg,u32 mask){writel(readl(reg)|mask,reg);}
+static void clrbits_le32(uintptr_t reg,u32 mask){writel(readl(reg)&~mask,reg);}
+static void clrsetbits_le32(uintptr_t reg,u32 mask,u32 value){writel((readl(reg)&~mask)|value,reg);}
+static void udelay(unsigned int us){elapsed+=us;}
+static void mdelay(unsigned int ms){elapsed+=1000*ms;}
+static void tyfza1_recovery_leds(int state){(void)state;}
+static int env_set(const char *name,const char *value) {
+ char *target=!strcmp(name,"board_variant")?variant:!strcmp(name,"b_conf")?conf:!strcmp(name,"bootcmd")?bootcmd:NULL;
+ if(target)strcpy(target,value?value:"");
  return 0;
 }
 '''
         tail = r'''
-int run(const void *data, size_t size, int gpio, int errors) {
- flash=data;mtd.size=size;strap=gpio;faults=errors;gpio_reads=reads[0]=reads[1]=0;
- strcpy(variant,"stale");strcpy(conf,"stale");strcpy(bootcmd,"stale");
+int run(uint32_t id,unsigned int fail,uint32_t previous,int stale) {
+ phy_id=id;fail_phase=fail;seed=previous;control=1;writes=starts=clears=0;
+ elapsed=reset_at=released_at=enabled_at=strap_reads=sequence_errors=0;
+ strcpy(variant,stale?"2p5g":"4ge");strcpy(conf,stale?"conf-0":"conf-1");strcpy(bootcmd,"stale");
  return board_late_init();
 }
-const char *setting(int key) {return key==0 ? variant : key==1 ? conf : bootcmd;}
-int metric(int key) {return key==2 ? gpio_reads : reads[key];}
+const char *setting(int key){return key==0?variant:key==1?conf:bootcmd;}
+unsigned int metric(int key){switch(key){case 0:return elapsed;case 1:return starts;case 2:return clears;
+ case 3:return strap_reads;case 4:return sequence_errors;default:return readl(0xf4329118);}}
+unsigned int phase(int index){return phases[index];}
+unsigned int reg_at(int index){return registers[index];}
 '''
         path = Path(cls.work.name) / 'board.c'
-        path.write_text(prelude + detector + late_init + tail)
+        path.write_text(prelude + (BOARD / 'mdio.inc').read_text() + detector + late + tail)
         library = Path(cls.work.name) / 'board.so'
         subprocess.run(['cc', '-O2', '-shared', '-fPIC', '-Wall', '-Wextra', '-Werror',
-                        '-I' + str(BOARD), str(path), str(BOARD / 'formats.c'),
-                        '-lcrypto', '-o', str(library)], check=True)
+                        '-Wno-unused-function', str(path), '-o', str(library)], check=True)
         cls.lib = C.CDLL(str(library))
-        cls.lib.run.argtypes = [C.c_void_p, C.c_size_t, C.c_int, C.c_int]
+        cls.lib.run.argtypes = [C.c_uint32, C.c_uint, C.c_uint32, C.c_int]
         cls.lib.setting.restype = C.c_char_p
+        cls.lib.metric.restype = C.c_uint
 
     @classmethod
     def tearDownClass(cls):
         cls.work.cleanup()
 
-    def boot(self, variant):
-        return bytearray((ROOT / f'evidence/stock-boot/{variant}-boot.bin').read_bytes())
-
-    def detect(self, image, gpio=0, errors=0):
-        data = C.create_string_buffer(bytes(image))
-        self.assertEqual(self.lib.run(data, len(image), gpio, errors), 0)
+    def detect(self, phy_id, fail=0, seed=0, stale=0):
+        self.assertEqual(self.lib.run(phy_id, fail, seed, stale), 0)
+        self.assertEqual(self.lib.metric(3), 0, 'GPIO strap must not decide board identity')
+        self.assertEqual(self.lib.metric(4), 0, 'PHY power/reset/MDIO ordering violation')
+        self.assertEqual(self.lib.metric(5), seed | 1, 'Preserve the MDC prescaler')
         return tuple(self.lib.setting(i).decode() for i in range(3))
 
-    def change_payload(self, image, name):
-        uid = bytes.fromhex({'bl2': '5ff9ec0b4d223e4da544c39d81c73f0a',
-                             'bl31': '47d4086d4cfe98469b952950cbbd5a00',
-                             'bl33': 'd6d0eea7fcead54b97829934f234b6e4'}[name])
-        for base in FIPS:
-            entry = image.index(uid, base + 16, base + 16 + 32 * 40)
-            offset, size = struct.unpack_from('<QQ', image, entry + 16)
-            image[base + offset + size - 1] ^= 1
+    def test_four_ge_absent_external_phy_ignores_zero_strap_and_stale_variant(self):
+        for seed in (0, 0xa5a5a5a5, 0xffffffff):
+            self.assertEqual(self.detect(0xffffffff, seed=seed, stale=1), ('4ge', 'conf-1', 'bootmenu 3'))
 
-    def test_four_ge_with_zero_gpio_is_not_two_p5g(self):
-        self.assertEqual(self.detect(self.boot('4ge')), ('4ge', 'conf-1', 'bootmenu 3'))
+    def test_rtl8221b_revisions_ignore_stale_four_ge_variant(self):
+        for revision in range(16):
+            self.assertEqual(self.detect(0x001cc840 | revision), ('2p5g', 'conf-0', 'bootmenu 3'))
 
-    def test_both_boards_override_all_gpio_values_and_stale_environment(self):
-        for variant, conf in (('4ge', 'conf-1'), ('2p5g', 'conf-0')):
-            for gpio in range(8):
-                with self.subTest(variant=variant, gpio=gpio):
-                    self.assertEqual(self.detect(self.boot(variant), gpio), (variant, conf, 'bootmenu 3'))
+    def test_power_sequence_and_actual_clause45_id_transactions(self):
+        self.detect(0x001cc848)
+        self.assertEqual([self.lib.metric(i) for i in (0, 1, 2)], [630000, 4, 8])
+        self.assertEqual([self.lib.phase(i) for i in range(4)], [0x10107, 0xd8107, 0x10107, 0xd8107])
+        self.assertEqual([self.lib.reg_at(i) for i in (0, 2)], [2, 3])
 
-    def test_bl33_updates_do_not_change_board_identity(self):
-        for variant in ('4ge', '2p5g'):
-            image = self.boot(variant)
-            self.change_payload(image, 'bl33')
-            self.assertEqual(self.detect(image)[0], variant)
+    def test_each_mdio_phase_timeout_is_an_error_not_an_absent_phy(self):
+        for phase in range(1, 5):
+            for phy in (0x001cc848, 0xffffffff):
+                self.assertEqual(self.detect(phy, fail=phase), ('unknown', '', 'tyfrecovery'))
+                self.assertEqual(self.lib.metric(1), phase)
+                self.assertEqual(self.lib.metric(0), 680000)
 
-    def test_backup_fip_used_after_bad_toc_or_read_error(self):
-        for variant in ('4ge', '2p5g'):
-            image = self.boot(variant)
-            image[FIPS[0]] ^= 1
-            self.assertEqual(self.detect(image)[0], variant)
-            self.assertEqual([self.lib.metric(i) for i in (0, 1)], [1, 1])
-            self.assertEqual(self.detect(self.boot(variant), errors=2)[0], variant)
-
-    def test_corrected_ecc_data_is_accepted(self):
-        self.assertEqual(self.detect(self.boot('4ge'), errors=16)[0], '4ge')
-
-    def test_both_early_payloads_must_match(self):
-        for name in ('bl2', 'bl31'):
-            image = self.boot('4ge')
-            self.change_payload(image, name)
-            self.assertEqual(self.detect(image, gpio=0)[0], '2p5g')
-
-    def test_unavailable_or_short_flash_reads_fall_back_to_gpio(self):
-        image = self.boot('4ge')
-        for errors in (1, 6, 8):
-            self.assertEqual(self.detect(image, gpio=0, errors=errors)[0], '2p5g')
-            self.assertEqual(self.detect(image, gpio=1, errors=errors)[0], '4ge')
-        self.assertEqual(self.detect(image[:512], gpio=1)[0], '4ge')
-
-    def test_unknown_firmware_and_gpio_keep_recovery_only(self):
-        for gpio in range(2, 8):
-            self.assertEqual(self.detect(bytes(0x200000), gpio), ('unknown', '', 'tyfrecovery'))
+    def test_zero_partial_or_unexpected_ids_are_not_valid_board_identifiers(self):
+        for phy in (0, 0xffff, 0xffff0000, 0x001ccac4, 0x001cc849 ^ 0x10000):
+            self.assertEqual(self.detect(phy), ('unknown', '', 'tyfrecovery'))
 
 
 if __name__ == '__main__':
