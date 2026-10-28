@@ -204,6 +204,9 @@ def main():
     (dest / "include/tyfza1_build.h").write_text(
         f"#define TYFZA1_PROJECT_VERSION {json.dumps(version)}\n"
         f"#define TYFZA1_BUILD_COMMIT {json.dumps(commit)}\n")
+    eth_class = dest / "net/eth-uclass.c"
+    shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "net/eth-uclass.c", eth_class)
+    replace(eth_class, "\t\t\tif (ret < 0)\n\t\t\t\tret = eth_errno;\n\t\t\telse\n\t\t\t\tbreak;", "\t\t\tif (ret >= 0)\n\t\t\t\tbreak;")
     phy = dest / "drivers/net/phy/phy.c"
     shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "drivers/net/phy/phy.c", phy)
     replace(phy, "\tgenphy_config_aneg(phydev);\n\n\treturn 0;", "\treturn genphy_config_aneg(phydev);")
@@ -273,6 +276,14 @@ def main():
     page.write_bytes(b"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Encoding: gzip\r\nConnection: close\r\nContent-Length: " + str(len(compressed)).encode() + b"\r\n\r\n" + compressed)
     replace(http, "fs_set_data(file, httpd_page, httpd_page_size);", "fs_set_data(file, httpd_page, httpd_page_size);\n\t\tfile->flags = FS_FILE_FLAGS_HEADER_INCLUDED;")
     replace(http, '#include <net/httpd.h>', '#include <net/httpd.h>\n#include <tyfza1_recovery.h>\n#include <tyfza1_build.h>')
+    # Match lmb_reserve_uboot_region: the runtime stack grows below start_addr_sp.
+    replace(http, """\t/* The initial stack boundary keeps uploads below relocated U-Boot state. */
+	phys_addr_t safe_end = min_t(phys_addr_t, ram_end, gd->start_addr_sp);
+	phys_addr_t end = (phys_addr_t)addr + len;""", """\tphys_addr_t safe_end;
+	phys_addr_t end = (phys_addr_t)addr + len;
+
+	if (gd->start_addr_sp < CONFIG_STACK_SIZE) return false;
+	safe_end = min_t(phys_addr_t, ram_end, gd->start_addr_sp - CONFIG_STACK_SIZE);""")
     # Match physical main-area backups: bad-block gaps occupy bytes in RAM, too.
     replace(http, "/* NAND offsets advance across factory bad blocks while RAM stays packed. */",
             "/* Preserve physical offsets and FF gaps, matching downloaded MTD backups. */")

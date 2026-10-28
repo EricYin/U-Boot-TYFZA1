@@ -256,6 +256,8 @@ python3 scripts/test_sandbox_crypto.py
 
 冷启动错误传递、实际 PHY 协商解析和下载中断处理见 [后续复核](docs/COLD-NEGOTIATION-DOWNLOAD-REVIEW.md)。
 
+上传内存边界、重复恢复启动与网页状态的稳定性修复见 [稳定性复核](docs/STABILITY-REVIEW.md)。
+
 ## 来源与许可
 
 - [pbs05/uboot-an758x](https://github.com/pbs05/uboot-an758x)：恢复功能与网页前端参考。

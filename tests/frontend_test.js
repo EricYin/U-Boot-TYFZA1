@@ -68,6 +68,19 @@ vm.runInContext(script,context);
  assert.equal(picker.children[2].textContent,'<test>.bin');
  pickerInput.files=[];pickerInput.onchange();assert.equal(picker.children[2].textContent,'No file selected');
  `,context);
+ let scheduled=0,requests=0;
+ const originalTimeout=context.setTimeout,originalFetch=context.fetch;
+ context.setTimeout=()=>{scheduled++};
+ context.fetch=async(...args)=>{requests++;return originalFetch(...args)};
+ try{
+  vm.runInContext('rebooting=true;localBusy=true',context);
+  await vm.runInContext('monitor()',context);
+  assert.equal(requests,0,'Boot in progress must not poll the device');
+  assert.equal(scheduled,1,'Monitor must remain scheduled if the boot attempt fails');
+  vm.runInContext('rebooting=false;localBusy=false',context);
+  await vm.runInContext('monitor()',context);
+  assert.equal(requests,2,'Failed boot must resume task and link polling');
+ }finally{context.setTimeout=originalTimeout;context.fetch=originalFetch;}
  const restore=JSON.parse(await vm.runInContext(fs.readFileSync(path.join(__dirname,'browser_restore_fixture.js'),'utf8'),context));
  assert.equal(restore.results.length,5);
  console.log('Version/commit, both boards, translation, file selection and five restore flows passed');

@@ -300,8 +300,7 @@ el('scrubButton').onclick=()=>{
 };
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=>{rebooting=true;await task({operation:b.dataset.action})}));
 async function monitor(){
- if(rebooting)return;
- if(!localBusy){try{status(await request('/api/task'));if(!remoteBusy)showLink(await request('/api/device'))}catch(e){remoteBusy=true;text('state',t('waiting'));controls()}}
+ if(!rebooting&&!localBusy){try{status(await request('/api/task'));if(!remoteBusy)showLink(await request('/api/device'))}catch(e){remoteBusy=true;text('state',t('waiting'));controls()}}
  setTimeout(monitor,1500);
 }
 document.querySelectorAll('input[type=file]').forEach(filePicker);
