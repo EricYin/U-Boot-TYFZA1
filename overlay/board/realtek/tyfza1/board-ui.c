@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <config.h>
-#include <env.h>
 #include <time.h>
 #include <asm/io.h>
 #include <linux/delay.h>
@@ -19,7 +18,7 @@ int tyfza1_reset_held(void)
 	unsigned int i;
 	setbits_le32(GPIO_MUX, pin);
 	setbits_le32(GPIO_DIR, pin);
-	/* Sample before PHY discovery, so releasing Reset during it is harmless. */
+	/* Latch Reset before the boot menu. */
 	for (i = 0; i < 3; i++) {
 		if (readl(GPIO_IN) & pin) return 0;
 		udelay(1000);
@@ -27,34 +26,15 @@ int tyfza1_reset_held(void)
 	return 1;
 }
 
-static const unsigned int *lamp_pins;
-static u32 lamp_mask, lamp_low, lamp_mux, lamp_dir, lamp_out;
+/* PON/LOS are GPIO9/10, active low, on both original device trees. */
+static const unsigned int lamp_pins[] = { 9, 10 };
+static const u32 lamp_mask = (1U << 9) | (1U << 10);
+static const u32 lamp_low = (1U << 9) | (1U << 10);
+static u32 lamp_mux, lamp_dir, lamp_out;
 static enum tyfza1_leds lamp_state;
 static ulong lamp_since;
 static size_t lamp_done, lamp_total;
 static u32 lamp_lit;
-
-/* LAN1..LAN4 pins; lamp_low is the all-off output level. */
-static int lamp_select(void)
-{
-	static const unsigned int four_ge[] = { 4, 3, 1, 0 };
-	static const unsigned int two_p5g[] = { 11, 12, 3, 4 };
-	const char *variant = env_get("board_variant");
-	unsigned int i;
-	if (!variant) return -1;
-	if (!strcmp(variant, "4ge")) {
-		lamp_pins = four_ge;
-		lamp_low = (1U << 4) | (1U << 3) | (1U << 1) | 1;
-	} else if (!strcmp(variant, "2p5g")) {
-		lamp_pins = two_p5g;
-		lamp_low = (1U << 3) | (1U << 4);
-	} else {
-		return -1;
-	}
-	lamp_mask = 0;
-	for (i = 0; i < 4; i++) lamp_mask |= 1U << lamp_pins[i];
-	return 0;
-}
 
 static void lamp_claim(void)
 {
@@ -86,9 +66,9 @@ static void lamp_show(u32 lit)
 void tyfza1_boot_leds(void)
 {
 	unsigned int i;
-	if (lamp_state != TYFZA1_LEDS_OFF || lamp_select()) return;
+	if (lamp_state != TYFZA1_LEDS_OFF) return;
 	lamp_claim();
-	for (i = 0; i < 4; i++) {
+	for (i = 0; i < 2; i++) {
 		lamp_show(1U << lamp_pins[i]);
 		mdelay(150);
 		lamp_show(0);
@@ -121,7 +101,7 @@ void tyfza1_recovery_leds_poll(void)
 		if (t / 50 % 2 == 0) lit = 1U << lamp_pins[0];
 		break;
 	case TYFZA1_LEDS_BUSY:
-		step = lamp_total ? min_t(size_t, lamp_done * 4 / lamp_total, 3) : 0;
+		step = lamp_total ? min_t(size_t, lamp_done * 2 / lamp_total, 1) : 0;
 		for (i = 0; i < step; i++) lit |= 1U << lamp_pins[i];
 		if (t / 300 % 2 == 0) lit |= 1U << lamp_pins[step];
 		break;
@@ -130,7 +110,7 @@ void tyfza1_recovery_leds_poll(void)
 		break;
 	case TYFZA1_LEDS_FAILED:
 		i = t / 150 % 2;
-		lit = (1U << lamp_pins[i]) | (1U << lamp_pins[i + 2]);
+		lit = 1U << lamp_pins[i];
 		break;
 	default:
 		break;
@@ -146,7 +126,6 @@ void tyfza1_recovery_leds(enum tyfza1_leds state)
 		return;
 	}
 	if (lamp_state == TYFZA1_LEDS_OFF) {
-		if (lamp_select()) return;
 		lamp_claim();
 	} else if (state == lamp_state) {
 		return;

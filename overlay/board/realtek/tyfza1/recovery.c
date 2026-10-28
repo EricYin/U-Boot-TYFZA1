@@ -38,12 +38,12 @@ static int volume_verify(char *name, const void *data, size_t length,
 static int verify_fit(const struct tyf_payload *image)
 {
 	const void *data;
-	const char *conf = env_get("b_conf"), *variant = env_get("board_variant");
+	const char *conf = tyfza1_boot_config();
 	void *dtb = NULL;
 	size_t size;
 	u8 comp;
 	int node, fdt, images, child, ret = -EINVAL;
-	if (!conf || !variant || (strcmp(variant, "4ge") && strcmp(variant, "2p5g")) ||
+	if (!conf ||
 	    fit_check_format(image->data, image->size)) return -EINVAL;
 	images = fdt_path_offset(image->data, FIT_IMAGES_PATH);
 	if (images < 0) return -EINVAL;
@@ -74,8 +74,7 @@ static int verify_fit(const struct tyf_payload *image)
 		goto out;
 	}
 	if (fdt_check_full(data, size)) goto out;
-	ret = fdt_node_check_compatible(data, 0, !strcmp(variant, "2p5g") ?
-		"tianyi,tyfza1-2p5g" : "tianyi,tyfza1");
+	ret = fdt_node_check_compatible(data, 0, "tianyi,tyfza1");
 	if (ret) ret = -EINVAL;
 out:
 	free(dtb);
@@ -94,6 +93,8 @@ int tyfza1_boot_upload(ulong address, size_t size)
 {
 	const char *slot = env_get("tyfza1_slot");
 	int ret = tyfza1_check_fit(address, size);
+	if (ret) return ret;
+	ret = env_set("b_conf", tyfza1_boot_config());
 	if (ret) return ret;
 	if (!slot) slot = env_get("sw_commit");
 	/* Signed system scripts select their root volume through root_mtd. */
@@ -295,15 +296,30 @@ int tyfza1_install_loader(ulong address, size_t size, bool bl2, void (*poll)(voi
 	/* Taurus has no separate AN758x preloader partition. */
 	if (bl2) return -EINVAL;
 	bundle = map_sysmem(address, size);
-	ret = tyf_select_loader(bundle, size, env_get("board_variant"), &selected);
-	if (!ret) {
-		address = map_to_sysmem(selected.data);
-		size = selected.size;
+	/* Select the early-firmware profile by immutable boot contents, never by
+	 * the user's Linux configuration or an automatically inferred model. */
+	{
+		static const char *profiles[] = { "4ge", "2p5g" };
+		struct tyf_payload match = {0};
+		unsigned int i, matches = 0;
+		for (i = 0; i < ARRAY_SIZE(profiles); i++) {
+			ret = tyf_select_loader(bundle, size, profiles[i], &selected);
+			if (ret || tyfza1_loader_certificates(selected.data, selected.size)) {
+				matches = 0; ret = -EINVAL; break;
+			}
+			ret = tyfza1_validate_loader(map_to_sysmem(selected.data), selected.size);
+			if (!ret) { match = selected; matches++; }
+			else if (ret != -EINVAL) break;
+			if (size == TYF_BOOT_SIZE) break;
+		}
+		if (matches != 1 || (ret && ret != -EINVAL)) {
+			unmap_sysmem(bundle);
+			return ret ? ret : -EINVAL;
+		}
+		address = map_to_sysmem(match.data);
+		size = match.size;
 	}
 	unmap_sysmem(bundle);
-	if (ret) return -EINVAL;
-	ret = tyfza1_validate_loader(address, size);
-	if (ret) return ret;
 	input = map_sysmem(address, size);
 	mtd = get_mtd_device_nm("boot");
 	if (IS_ERR(mtd)) { unmap_sysmem(input); return PTR_ERR(mtd); }

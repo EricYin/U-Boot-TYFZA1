@@ -61,7 +61,7 @@ static struct mii_dev bus;
 static struct phy_device phys[8];
 static struct phy_driver driver={"mock PHY"};
 static unsigned int missing,config_errors,read_errors,write_errors,links;
-static int configured,enabled,selected_speed,failed_scans;
+static int configured,enabled,selected_speed,failed_scans,status_calls,drop_after;
 static void *dev_get_priv(struct udevice *d){return d->priv;}
 static struct phy_device *phy_connect(struct mii_dev *b,int addr,struct udevice *d,int interface){
  (void)b;(void)d;(void)interface;return missing&(1U<<phys[addr].port)?NULL:&phys[addr];
@@ -71,9 +71,8 @@ static int phy_read(struct phy_device *p,int d,int r){(void)d;(void)r;return rea
 static int phy_write(struct phy_device *p,int d,int r,int v){(void)d;(void)r;(void)v;return write_errors&(1U<<p->port)?-EIO:0;}
 static int tyf_ni_phy_status(struct phy_device *p){
  if((missing|config_errors|read_errors|write_errors)&(1U<<p->port))failed_scans++;
- p->link=!!(links&(1U<<p->port));return 0;
+ status_calls++;p->link=drop_after && status_calls>=drop_after?0:!!(links&(1U<<p->port));return 0;
 }
-static int tyf_ni_port4_speed(struct phy_device *p){return p->link?0:-EINVAL;}
 static void ni_enable_tx_rx(int port,int on){if(on)enabled=port;else if(enabled==port)enabled=-1;}
 static void udelay(unsigned int n){(void)n;}
 static int sync_mode(unsigned int p,int m,struct phy_device *phy){(void)p;(void)m;selected_speed=phy->speed;return 0;}
@@ -83,9 +82,9 @@ static void select_port(unsigned int p){(void)p;}
 int run(int two,unsigned int absent,unsigned int config,unsigned int rd,unsigned int wr,
         unsigned int up,int active,int scan){
  missing=absent;config_errors=config;read_errors=rd;write_errors=wr;links=up;
- configured=failed_scans=selected_speed=0;enabled=-1;
+ configured=failed_scans=selected_speed=status_calls=0;enabled=-1;
  memset(&priv,0,sizeof(priv));memset(&bus,0,sizeof(bus));memset(phys,0,sizeof(phys));
- int ids[]={1,2,3,two?-1:4,two?7:-1,-1};
+ (void)two;int ids[]={1,2,3,4,-1,-1};
  for(int i=0;i<6;i++){
   priv.maps[i].phy_id=ids[i];if(ids[i]<0)continue;
   struct phy_device *p=&phys[ids[i]];
@@ -96,6 +95,7 @@ int run(int two,unsigned int absent,unsigned int config,unsigned int rd,unsigned
  priv.aal_mode_sync=sync_mode;priv.aal_set_active_port=select_port;
  struct udevice dev={&priv};return cortina_ni_start(&dev);
 }
+void drop(int n){drop_after=n;}
 int restart(unsigned int up){links=up;struct udevice dev={&priv};return cortina_ni_start(&dev);}
 int metric(int key){
  switch(key){case 0:return enabled;case 1:return priv.active_port;case 2:return priv.is_phyinited;
@@ -116,9 +116,17 @@ int metric(int key){
     def start(self, two=1, missing=0, config=0, read=0, write=0, up=1, active=0, scan=1):
         return self.lib.run(two, missing, config, read, write, up, active, scan)
 
-    def test_external_missing_or_config_error_keeps_each_gigabit_port(self):
+    def test_link_lost_after_scan_waits_instead_of_failing_start(self):
+        self.lib.drop(2)
+        try:
+            self.assertEqual(self.start(up=1),0)
+            self.assertEqual(self.lib.metric(0),-1)
+        finally:
+            self.lib.drop(0)
+
+    def test_disabled_external_phy_does_not_affect_each_gigabit_port(self):
         for failure in ('missing', 'config'):
-            for port in (0, 1, 2):
+            for port in range(4):
                 with self.subTest(failure=failure, port=port):
                     self.assertEqual(self.start(**{failure: 1 << 4}, up=1 << port), 0)
                     self.assertEqual(self.lib.metric(0), port)
@@ -126,28 +134,20 @@ int metric(int key){
                     self.assertEqual(self.lib.metric(4), -1)
                     self.assertEqual(self.lib.metric(6), 0)
 
-    def test_healthy_external_phy_retains_2500_mbps_support(self):
+    def test_external_port_never_enabled(self):
         self.assertEqual(self.start(up=1 << 4), 0)
-        self.assertEqual(self.lib.metric(0), 4)
-        self.assertEqual(self.lib.metric(4), 7)
-        self.assertEqual(self.lib.metric(5), 2500)
-
-    def test_external_port_survives_internal_phy_failures(self):
-        for failure in ('missing', 'config', 'read', 'write'):
-            with self.subTest(failure=failure):
-                self.assertEqual(self.start(**{failure: 7}, up=1 << 4), 0)
-                self.assertEqual(self.lib.metric(0), 4)
-                self.assertEqual(self.lib.metric(5), 2500)
+        self.assertEqual(self.lib.metric(0), -1)
+        self.assertEqual(self.lib.metric(4), -1)
 
     def test_each_internal_failure_is_isolated(self):
         for failure in ('missing', 'config', 'read', 'write'):
-            for port in (0, 1, 2):
+            for port in range(4):
                 with self.subTest(failure=failure, port=port):
-                    self.assertEqual(self.start(**{failure: 1 << port}, up=7), 0)
+                    self.assertEqual(self.start(**{failure: 1 << port}, up=15), 0)
                     self.assertNotEqual(self.lib.metric(0), port)
                     self.assertEqual(self.lib.metric(6), 0)
 
-    def test_failed_manually_selected_external_port_falls_back(self):
+    def test_invalid_internal_driver_selection_falls_back(self):
         self.assertEqual(self.start(missing=1 << 4, active=4, scan=0), 0)
         self.assertEqual(self.lib.metric(0), 0)
         self.assertEqual(self.lib.metric(7), 1)
@@ -155,7 +155,7 @@ int metric(int key){
     def test_recovery_can_wait_for_cable_after_external_failure(self):
         self.assertEqual(self.start(config=1 << 4, up=0), 0)
         self.assertEqual(self.lib.metric(0), -1)
-        for port in (0, 1, 2):
+        for port in range(4):
             self.assertEqual(self.lib.restart(1 << port), 0)
             self.assertEqual(self.lib.metric(0), port)
             self.assertEqual(self.lib.metric(6), 0)

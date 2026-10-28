@@ -2,17 +2,19 @@
 #ifndef TYFZA1_RECOVERY_H
 #define TYFZA1_RECOVERY_H
 #include <linux/types.h>
-int tyfza1_board_id(void);
+const char *tyfza1_boot_config(void);
+int tyfza1_save_boot_config(const char *conf);
+int tyfza1_link_speed(int *full_duplex);
 int tyfza1_reset_held(void);
 void tyfza1_boot_leds(void);
 enum tyfza1_leds {
 	TYFZA1_LEDS_OFF,	/* pins returned to their previous owner */
 	TYFZA1_LEDS_HELD,	/* Reset recognised: all on, safe to release */
 	TYFZA1_LEDS_IDLE,	/* recovery waiting: heartbeat double flash */
-	TYFZA1_LEDS_UPLOAD,	/* receiving into RAM: LAN1 flickers */
-	TYFZA1_LEDS_BUSY,	/* writing Flash: quarter progress bar */
+	TYFZA1_LEDS_UPLOAD,	/* receiving into RAM: PON flickers */
+	TYFZA1_LEDS_BUSY,	/* writing Flash: two-stage progress */
 	TYFZA1_LEDS_DONE,	/* write succeeded: all on for two seconds */
-	TYFZA1_LEDS_FAILED,	/* write failed: LAN1/3 and LAN2/4 alternate */
+	TYFZA1_LEDS_FAILED,	/* write failed: PON and LOS alternate */
 };
 void tyfza1_recovery_leds(enum tyfza1_leds state);
 void tyfza1_recovery_leds_busy(size_t done, size_t total);

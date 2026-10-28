@@ -28,6 +28,7 @@ class RestoreTests(unittest.TestCase):
         restore = "\n".join(line for line in (BOARD / "restore.c").read_text().splitlines() if not line.startswith("#include"))
         tail = r'''
 static void no_poll(void) {}
+int test_loader(const void *data,size_t size){return tyfza1_install_loader((ulong)data,size,false,no_poll);}
 int test_reset(const void *image, size_t size) {
  restore_release();
  if (flash) munmap(flash, 0x10000000);
@@ -64,6 +65,7 @@ int test_range(size_t offset, size_t size, unsigned char value) {
                         str(BOARD / "certificates.c"), str(ROOT / "tests/certificate_openssl.c"),
                         "-lcrypto", "-o", str(library)], check=True)
         cls.lib = C.CDLL(str(library))
+        cls.lib.test_loader.argtypes = [C.c_void_p, C.c_size_t]
         cls.lib.test_reset.argtypes = [C.c_void_p, C.c_size_t]
         cls.lib.test_job.argtypes = [C.c_char_p, C.c_void_p, C.c_size_t, C.c_size_t, C.c_size_t, C.c_uint32]
         cls.lib.test_metric.argtypes = [C.c_int]; cls.lib.test_metric.restype = C.c_size_t
@@ -74,6 +76,25 @@ int test_range(size_t offset, size_t size, unsigned char value) {
         cls.loader = C.create_string_buffer((ROOT / "output/candidate-4ge/taurus_spi_nand_loader.img").read_bytes())
         cls.chunk = C.create_string_buffer(b"\xa5" * CHUNK)
         cls.metrics = []
+
+    def test_universal_update_matches_both_original_profiles(self):
+        bundle = (ROOT / 'output/release/tyfza1-uboot-universal.bin').read_bytes()
+        for profile in ('4ge', '2p5g'):
+            original = (ROOT / f'inputs/{profile}-boot.bin').read_bytes()
+            self.assertEqual(self.lib.test_reset(original, BOOT), 0)
+            self.assertEqual(self.lib.test_loader(bundle, len(bundle)), 0)
+            self.assertEqual(self.lib.test_erase_at(0), 0x100000)
+            self.assertEqual(self.lib.test_erase_at(6), 0x40000)
+
+    def test_universal_update_rejects_ambiguous_or_damaged_profile_before_erase(self):
+        bundle = (ROOT / 'output/release/tyfza1-uboot-universal.bin').read_bytes()
+        header = len(bundle) - 2 * BOOT
+        ambiguous = bundle[:header+BOOT] + bundle[header:header+BOOT]
+        self.assertNotEqual(self.lib.test_loader(ambiguous, len(ambiguous)), 0)
+        self.assertEqual(self.lib.test_metric(3), 0)
+        damaged = bytearray(bundle); damaged[header+BOOT+0x40000] ^= 1
+        self.assertNotEqual(self.lib.test_loader(bytes(damaged), len(damaged)), 0)
+        self.assertEqual(self.lib.test_metric(3), 0)
 
     def setUp(self):
         self.assertEqual(self.lib.test_reset(self.loader, BOOT), 0)

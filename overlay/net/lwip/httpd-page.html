@@ -25,7 +25,7 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 <body><main>
 <header><h1>TYFZA1 U-Boot</h1><button id="language">简体中文</button></header>
 <div class="info">
-<div><span data-t="model">Model</span><strong id="model">—</strong><small id="ports"></small></div>
+<div><span data-t="model">Model</span><strong id="model">—</strong><small id="ports"></small><small id="link"></small></div>
 <div><span>RAM / Flash</span><strong id="memory">—</strong></div>
 <div><span data-t="version">Version</span><strong id="version">—</strong><small id="commit"></small></div>
 </div>
@@ -40,6 +40,10 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 <div id="ubiSection">
 <h2 data-t="install">Install system</h2>
 <label for="firmware">sysupgrade.bin</label>
+<p data-t="gigabitHint">Recovery uses ordinary gigabit ports; the 2.5G port is unavailable here.</p>
+<label data-t="bootConfig">OpenWrt boot configuration</label>
+<div class="row"><select id="bootConfig"><option value="" data-t="selectConfig">Select once</option><option value="conf-1" data-t="fourGe">Four gigabit ports</option><option value="conf-0" data-t="twoGe">2.5G + three gigabit ports</option></select><button id="bootConfigButton" data-t="save">Save</button></div>
+<p data-t="bootConfigHint">Select the physical hardware once; future upgrades retain this setting.</p>
 <div class="row"><input id="firmware" type="file" accept=".bin"><button id="flashButton" class="primary" data-t="uploadFlash">Upload and flash</button></div>
 <h3 class="actions" data-t="ubootTitle">Flash U-Boot</h3>
 <label for="uboot">tyfza1-uboot-universal.bin</label>
@@ -92,8 +96,8 @@ footer{text-align:center;padding:12px 0 4px}footer a{color:var(--blue)}
 <script>
 'use strict';
 const words={
-zh:{networkSettings:'恢复地址使用 httpd_ipaddr / httpd_netmask（下次进入生效）。httpd_dhcp 设为 0 立即并持久关闭 DHCP 服务，设为 1 下次进入时启用；电脑可手动设置同网段静态地址。',bl2Title:'刷写 BL2',ubiOperations:'UBI 操作',firstInstall:'可直接刷写 TYFZA1 sysupgrade。重建 UBI 会清空系统数据，出厂配置和校准卷保留在 Flash 中。',boardData:'板级数据',ubootTitle:'刷写 U-Boot',model:'机型',chooseFile:'选择文件',noFile:'未选择文件',unknownBoard:'未识别',version:'版本',flash:'刷机',backup:'备份',advanced:'高级',install:'刷写系统',uploadFlash:'上传并刷写',bootSystem:'启动系统',reboot:'重启',target:'目标',download:'下载备份',ramBoot:'内存启动',uploadBoot:'上传并启动',rebuild:'重建 UBI',partitionWrite:'分区写入',restoreAll:'恢复整片 Flash',restoreAllHint:'从 Flash 开头恢复主数据 .bin，包含引导程序和板级数据。按段写入并校验，最后更新引导区。坏块保留原偏移，不包含 OOB。文件大小必须与 Flash 容量相同。',flashTooLarge:'文件超过 Flash 容量',flashSizeMismatch:'请选择与 Flash 容量相同的完整主数据备份',clearBadBlocks:'清除坏块标记',clearBadBlocksHint:'擦除整片 NAND 闪存，包括出厂标记的坏块。所有数据将丢失。',scrubConfirm1:'此操作将清除所有坏块标记并擦除全部数据！\n\n点击"确定"后，请在 5 秒内再次点击按钮以确认。',scrubConfirm2:'再次点击以执行清除坏块操作！',uploadWrite:'上传并写入',environment:'环境变量',save:'保存',console:'命令控制台',execute:'执行',serial:'返回串口',cancel:'取消传输',idle:'就绪',upload:'上传中',downloadPhase:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中',waiting:'等待设备响应',busy:'设备正在处理其他操作',choose:'请选择文件',failed:'请求失败',cancelled:'传输已取消',whole:'整片 Flash',mtdHint:'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。',volumeHint:'UBI 卷数据',taskChanged:'设备任务已变化，请刷新页面',network:'连接中断，请检查设备状态'},
-en:{networkSettings:'Use httpd_ipaddr / httpd_netmask for the recovery address (next start). Set httpd_dhcp to 0 to disable DHCP immediately and persistently; 1 enables it on the next start.',bl2Title:'Flash BL2',ubiOperations:'UBI operations',firstInstall:'Install a TYFZA1 sysupgrade image directly. Rebuilding UBI replaces system volumes and keeps factory volumes in Flash.',boardData:'Board data',ubootTitle:'Flash U-Boot',model:'Model',chooseFile:'Choose file',noFile:'No file selected',unknownBoard:'Unknown',version:'Version',flash:'Flash',backup:'Backup',advanced:'Advanced',install:'Install system',uploadFlash:'Upload and flash',bootSystem:'Boot system',reboot:'Reboot',target:'Target',download:'Download backup',ramBoot:'RAM boot',uploadBoot:'Upload and boot',rebuild:'Rebuild UBI',partitionWrite:'Write partition',restoreAll:'Restore entire Flash',restoreAllHint:'Restores a main-area .bin from offset 0, including bootloader and board data. Chunks are written and verified before updating boot. Bad-block offsets stay in place; OOB is excluded. The file must match Flash capacity.',flashTooLarge:'File exceeds Flash capacity',flashSizeMismatch:'Select a complete main-area backup matching Flash capacity',clearBadBlocks:'Clear bad block markers',clearBadBlocksHint:'Erases the entire NAND chip including factory bad blocks. All data will be lost.',scrubConfirm1:'This will clear all bad block markers and erase all data!\n\nClick OK, then click the button again within 5 seconds to confirm.',scrubConfirm2:'Click again to execute scrub!',uploadWrite:'Upload and write',environment:'Environment',save:'Save',console:'Command console',execute:'Run',serial:'Return to serial',cancel:'Cancel transfer',idle:'Ready',upload:'Uploading',downloadPhase:'Downloading',queued:'Queued',working:'Working',done:'Complete',error:'Operation failed',erase:'Erasing',create:'Creating volumes',ready:'Upload complete','backup-ready':'Backup ready',verify:'Verifying',write:'Writing',waiting:'Waiting for device',busy:'Device is busy',choose:'Select a file',failed:'Request failed',cancelled:'Transfer cancelled',whole:'Entire Flash',mtdHint:'MTD backup contains physical main-area data with bad blocks padded with FF. NAND OOB is excluded.',volumeHint:'UBI volume data',taskChanged:'Device task changed; refresh the page',network:'Connection lost; check device status'}
+zh:{gigabitHint:'恢复网页请连接普通千兆口；U-Boot 不启用 2.5G 口。',bootConfig:'OpenWrt 启动配置',selectConfig:'请选择一次',fourGe:'全千兆版（4 个千兆口）',twoGe:'2.5G 版（1 个 2.5G + 3 个千兆口）',bootConfigHint:'按设备实际网口选择并保存一次，后续升级保留。',linkDown:'网线未连接',fullDuplex:'全双工',halfDuplex:'半双工',gigabitMode:'千兆口恢复',networkSettings:'恢复地址使用 httpd_ipaddr / httpd_netmask（下次进入生效）。httpd_dhcp 设为 0 立即并持久关闭 DHCP 服务，设为 1 下次进入时启用；电脑可手动设置同网段静态地址。',bl2Title:'刷写 BL2',ubiOperations:'UBI 操作',firstInstall:'可直接刷写 TYFZA1 sysupgrade。重建 UBI 会清空系统数据，出厂配置和校准卷保留在 Flash 中。',boardData:'板级数据',ubootTitle:'刷写 U-Boot',model:'机型',chooseFile:'选择文件',noFile:'未选择文件',version:'版本',flash:'刷机',backup:'备份',advanced:'高级',install:'刷写系统',uploadFlash:'上传并刷写',bootSystem:'启动系统',reboot:'重启',target:'目标',download:'下载备份',ramBoot:'内存启动',uploadBoot:'上传并启动',rebuild:'重建 UBI',partitionWrite:'分区写入',restoreAll:'恢复整片 Flash',restoreAllHint:'从 Flash 开头恢复主数据 .bin，包含引导程序和板级数据。按段写入并校验，最后更新引导区。坏块保留原偏移，不包含 OOB。文件大小必须与 Flash 容量相同。',flashTooLarge:'文件超过 Flash 容量',flashSizeMismatch:'请选择与 Flash 容量相同的完整主数据备份',clearBadBlocks:'清除坏块标记',clearBadBlocksHint:'擦除整片 NAND 闪存，包括出厂标记的坏块。所有数据将丢失。',scrubConfirm1:'此操作将清除所有坏块标记并擦除全部数据！\n\n点击"确定"后，请在 5 秒内再次点击按钮以确认。',scrubConfirm2:'再次点击以执行清除坏块操作！',uploadWrite:'上传并写入',environment:'环境变量',save:'保存',console:'命令控制台',execute:'执行',serial:'返回串口',cancel:'取消传输',idle:'就绪',upload:'上传中',downloadPhase:'下载中',queued:'等待执行',working:'正在处理',done:'完成',error:'操作失败',erase:'擦除中',create:'创建卷',ready:'上传完成','backup-ready':'备份已就绪',verify:'校验中',write:'写入中',waiting:'等待设备响应',busy:'设备正在处理其他操作',choose:'请选择文件',failed:'请求失败',cancelled:'传输已取消',whole:'整片 Flash',mtdHint:'MTD 备份为物理主数据，坏块填充 FF；NAND OOB 不包含在文件中。',volumeHint:'UBI 卷数据',taskChanged:'设备任务已变化，请刷新页面',network:'连接中断，请检查设备状态'},
+en:{gigabitHint:'Connect an ordinary gigabit port; U-Boot does not enable the 2.5G port.',bootConfig:'OpenWrt boot configuration',selectConfig:'Select once',fourGe:'Four gigabit ports',twoGe:'2.5G + three gigabit ports',bootConfigHint:'Select the physical hardware and save once; upgrades retain this setting.',linkDown:'Link down',fullDuplex:'full duplex',halfDuplex:'half duplex',gigabitMode:'Gigabit recovery',networkSettings:'Use httpd_ipaddr / httpd_netmask for the recovery address (next start). Set httpd_dhcp to 0 to disable DHCP immediately and persistently; 1 enables it on the next start.',bl2Title:'Flash BL2',ubiOperations:'UBI operations',firstInstall:'Install a TYFZA1 sysupgrade image directly. Rebuilding UBI replaces system volumes and keeps factory volumes in Flash.',boardData:'Board data',ubootTitle:'Flash U-Boot',model:'Model',chooseFile:'Choose file',noFile:'No file selected',version:'Version',flash:'Flash',backup:'Backup',advanced:'Advanced',install:'Install system',uploadFlash:'Upload and flash',bootSystem:'Boot system',reboot:'Reboot',target:'Target',download:'Download backup',ramBoot:'RAM boot',uploadBoot:'Upload and boot',rebuild:'Rebuild UBI',partitionWrite:'Write partition',restoreAll:'Restore entire Flash',restoreAllHint:'Restores a main-area .bin from offset 0, including bootloader and board data. Chunks are written and verified before updating boot. Bad-block offsets stay in place; OOB is excluded. The file must match Flash capacity.',flashTooLarge:'File exceeds Flash capacity',flashSizeMismatch:'Select a complete main-area backup matching Flash capacity',clearBadBlocks:'Clear bad block markers',clearBadBlocksHint:'Erases the entire NAND chip including factory bad blocks. All data will be lost.',scrubConfirm1:'This will clear all bad block markers and erase all data!\n\nClick OK, then click the button again within 5 seconds to confirm.',scrubConfirm2:'Click again to execute scrub!',uploadWrite:'Upload and write',environment:'Environment',save:'Save',console:'Command console',execute:'Run',serial:'Return to serial',cancel:'Cancel transfer',idle:'Ready',upload:'Uploading',downloadPhase:'Downloading',queued:'Queued',working:'Working',done:'Complete',error:'Operation failed',erase:'Erasing',create:'Creating volumes',ready:'Upload complete','backup-ready':'Backup ready',verify:'Verifying',write:'Writing',waiting:'Waiting for device',busy:'Device is busy',choose:'Select a file',failed:'Request failed',cancelled:'Transfer cancelled',whole:'Entire Flash',mtdHint:'MTD backup contains physical main-area data with bad blocks padded with FF. NAND OOB is excluded.',volumeHint:'UBI volume data',taskChanged:'Device task changed; refresh the page',network:'Connection lost; check device status'}
 };
 let language=(navigator.language||'').toLowerCase().startsWith('zh')?'zh':'en', localBusy=false, remoteBusy=true, activeXHR=null, targets=[], flashBytes=0, selectedTab='flash', rebooting=false;
 let activeRestore=0,serverRestore=0,cancelRestore=false;
@@ -154,12 +158,13 @@ async function request(url,options){
  if(!r.ok)throw new Error(r.status===409?t('busy'):value.error||t('failed'));
  return value;
 }
+function showLink(d){text('link',d.link_speed_mbps?d.link_speed_mbps+' Mbps · '+t(d.link_full_duplex?'fullDuplex':'halfDuplex'):t('linkDown'))}
 async function refresh(){
  const [d,s]=await Promise.all([request('/api/device'),request('/api/storage')]);targets=s.targets||[];
  text('model',d.model);text('memory',bytes(d.ram_bytes)+' / '+bytes(d.flash_bytes));
- const ports=el('ports'),unknown=d.ports==='';
- if(unknown)ports.dataset.t='unknownBoard';else delete ports.dataset.t;
- text('ports',unknown?t('unknownBoard'):d.ports||'');
+ el('ports').dataset.t='gigabitMode';text('ports',t('gigabitMode'));
+ showLink(d);
+ el('bootConfig').value=d.boot_config||'';
  text('version',d.project_version||d.version||'—');text('commit',d.build_commit||'');
  flashBytes=d.flash_bytes;
  const hasBl2=targets.some(v=>v.kind==='mtd'&&v.name==='bl2');
@@ -279,6 +284,7 @@ el('backupButton').onclick=()=>run(async()=>{
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=v.name+(v.kind==='mtd'?'-main':'')+'.bin';
  a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);
 });
+el('bootConfigButton').onclick=()=>run(async()=>{await task({operation:'env-set',name:'tyf_bootconf',value:el('bootConfig').value});await refresh()});
 el('envButton').onclick=()=>run(()=>task({operation:'env-set',name:el('envName').value,value:el('envValue').value}));
 el('envName').onchange=async()=>{try{const env=await request('/api/env');if(Object.hasOwn(env,el('envName').value))el('envValue').value=env[el('envName').value]}catch(e){}};
 el('commandButton').onclick=()=>run(()=>task({operation:'command',command:el('command').value}));
@@ -295,7 +301,7 @@ el('scrubButton').onclick=()=>{
 document.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>run(async()=>{rebooting=true;await task({operation:b.dataset.action})}));
 async function monitor(){
  if(rebooting)return;
- if(!localBusy){try{status(await request('/api/task'))}catch(e){remoteBusy=true;text('state',t('waiting'));controls()}}
+ if(!localBusy){try{status(await request('/api/task'));if(!remoteBusy)showLink(await request('/api/device'))}catch(e){remoteBusy=true;text('state',t('waiting'));controls()}}
  setTimeout(monitor,1500);
 }
 document.querySelectorAll('input[type=file]').forEach(filePicker);

@@ -25,7 +25,7 @@ const document = {
  }
 };
 const device={model:'TYFZA1',ram_bytes:536870912,flash_bytes:268435456,version:'U-Boot TYFZA1 1.1',
- project_version:'1.1',build_commit:'abcdef0-dirty',ports:'4×GE',ubi:true,board_data:[]};
+ project_version:'1.1',build_commit:'abcdef0-dirty',boot_config:'conf-1',link_speed_mbps:1000,link_full_duplex:true,ubi:true,board_data:[]};
 const context=vm.createContext({document,navigator:{language:'en'},location:{hostname:'127.0.0.1',port:'8924'},
  assert,device,console,setTimeout(){},clearTimeout(){},fetch:async url=>{
  assert(['/api/device','/api/storage','/api/task'].includes(url));
@@ -39,13 +39,17 @@ vm.runInContext(script,context);
  await vm.runInContext('refresh()',context);
  assert.equal(document.getElementById('version').textContent,'1.1');
  assert.equal(document.getElementById('commit').textContent,'abcdef0-dirty');
- device.ports='';await vm.runInContext('refresh()',context);
- assert.equal(document.getElementById('ports').textContent,'Unknown');
+ assert.equal(document.getElementById('ports').textContent,'Gigabit recovery');
+ assert.equal(document.getElementById('link').textContent,'1000 Mbps · full duplex');
+ assert.equal(document.getElementById('bootConfig').value,'conf-1');
+ device.boot_config='conf-0';device.link_speed_mbps=100;device.link_full_duplex=false;
+ await vm.runInContext('refresh()',context);
+ assert.equal(document.getElementById('link').textContent,'100 Mbps · half duplex');
+ assert.equal(document.getElementById('bootConfig').value,'conf-0');
  vm.runInContext("language='zh';applyLanguage()",context);
- assert.equal(document.getElementById('ports').textContent,'未识别');
- device.ports='2.5GE + 3×GE';device.build_commit='';await vm.runInContext('refresh()',context);
- assert.equal(document.getElementById('ports').textContent,'2.5GE + 3×GE');
- assert.equal(document.getElementById('commit').textContent,'');
+ device.link_speed_mbps=0;await vm.runInContext('refresh()',context);
+ assert.equal(document.getElementById('ports').textContent,'千兆口恢复');
+ assert.equal(document.getElementById('link').textContent,'网线未连接');
  vm.runInContext(`
  targets=[{kind:'mtd',name:'nand0',whole:true,size:268435456},
           {kind:'mtd',name:'boot',whole:false,size:2097152},

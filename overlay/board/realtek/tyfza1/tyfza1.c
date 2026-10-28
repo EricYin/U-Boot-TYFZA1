@@ -83,8 +83,6 @@ void board_preboot_os(void)
 
 int board_late_init(void)
 {
-	int board;
-
 	/* Match the stock success handoff to BL2/BL31 and their watchdog state. */
 	writel(0, PER_WDT_CTRL);
 	writel(0, GLOBAL_SCRATCH);
@@ -93,23 +91,15 @@ int board_late_init(void)
 	env_set("mtdids", CONFIG_MTDIDS_DEFAULT);
 	env_set("mtdparts", CONFIG_MTDPARTS_DEFAULT);
 
-	/* Identify the fitted PHY before selecting LAN ports or a system DT. */
-	board = tyfza1_board_id();
-	if (board < 0) {
-		printf("TYFZA1: board identification failed (%d)\n", board);
-		env_set("bootcmd", "tyfrecovery");
-		env_set("board_variant", "unknown");
-		env_set("b_conf", NULL);
-		return 0;
-	}
-	env_set("b_conf", board ? "conf-1" : "conf-0");
-	env_set("board_variant", board ? "4ge" : "2p5g");
+	/* Old automatically inferred values must not select a Linux device tree. */
+	env_set("board_variant", NULL);
+	env_set("b_conf", NULL);
 	/* Existing OEM NAND environments must not replace the new recovery entry. */
 	env_set("bootcmd", "bootmenu 3");
 	env_set("bootmenu_0", "Start OpenWrt=tyfboot; tyfrecovery");
 	env_set("bootmenu_1", "Web recovery=tyfrecovery");
 	env_set("boot_production", "tyfboot");
-	/* Reset was latched in board_init; board_variant selects the lamp pins. */
+	/* Reset was latched in board_init. Both boards share the status lamps. */
 	if (reset_requested) tyfza1_recovery_leds(TYFZA1_LEDS_HELD);
 	return 0;
 }
@@ -117,12 +107,15 @@ int board_late_init(void)
 static int tyfza1_boot(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	const char *committed = env_get("sw_commit");
-	const char *conf = env_get("b_conf");
+	const char *conf = tyfza1_boot_config();
 	int slot = committed && !strcmp(committed, "1");
 	char volume[16];
 
-	if (!conf || (strcmp(conf, "conf-0") && strcmp(conf, "conf-1")))
+	if (!conf) {
+		puts("Select and save the OpenWrt boot configuration in web recovery first.\n");
 		return CMD_RET_FAILURE;
+	}
+	if (env_set("b_conf", conf)) return CMD_RET_FAILURE;
 	if (ubi_part("ubi_device", NULL))
 		return CMD_RET_FAILURE;
 	snprintf(volume, sizeof(volume), "ubi_k%d", slot);

@@ -25,7 +25,8 @@ class Preview(BaseHTTPRequestHandler):
             board_data = [{"kind": "ubi", "target": n, "size": s} for n, s in BOARD_DATA]
             responses = {
                 "/api/device": {"model": "Tianyi TYFZA1",
-                                "ports": "2.5GE + 3×GE" if variant == "2p5g" else "4×GE",
+                                "boot_config": "conf-0" if variant == "2p5g" else "conf-1",
+                                "link_speed_mbps": 1000, "link_full_duplex": True,
                                 "version": "U-Boot 2026.07 (Sep 30 2026 - 15:00:05 +0000) TYFZA1 1.5",
                                 "project_version": "1.5", "build_commit": "b6b04e4",
                                 "ram_bytes": 0x20000000,

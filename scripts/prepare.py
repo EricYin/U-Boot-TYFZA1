@@ -56,7 +56,8 @@ def main():
     vendor = ROOT / "sources" / lock["realtek"]["directory"] / lock["realtek"]["subdirectory"]
     common = vendor / "board/realtek_10G_PON/common"
     board = dest / "board/realtek/tyfza1"
-    for name in ["eth_ni.c", "eth_ni.h", "eth_ni_taurus.c"]:
+    (board / "vendor/eth_ni_taurus.c").unlink(missing_ok=True)
+    for name in ["eth_ni.c", "eth_ni.h"]:
         out = board / "vendor" / name
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(common / name, out)
@@ -78,13 +79,40 @@ def main():
     replace(board / "vendor/eth_ni.c", "static struct phy_driver ni_internal =", "U_BOOT_PHY_DRIVER(tyfza1_internal) =")
     replace(board / "vendor/eth_ni.c", "\tphy_register(&ni_internal);", "")
     replace(board / "vendor/eth_ni.c", "cmdtp->help", "cmdtp->usage")
-    replace(board / "vendor/eth_ni.c", "\tif (result != CA_E_OK)\n\t\tvalue = result;", "\tif (result != CA_E_OK)\n\t\treturn result;")
-    replace(board / "vendor/eth_ni.c", "\taddr &= 0x1f;\n\n\tif (devad == MDIO_DEVAD_NONE)\n\t\tresult =", "\taddr &= 0x1f;\n\tif (addr == 7 && devad == MDIO_DEVAD_NONE) return 0xffff;\n\n\tif (devad == MDIO_DEVAD_NONE)\n\t\tresult =")
     ni = board / "vendor/eth_ni.c"
     text = ni.read_text()
-    begin = text.index("static ca_status_t __ca_mdio_c45_write", text.index("static struct phy_device *__get_curr_phydev"))
+    begin = text.index("static ca_status_t __ca_mdio_c45_write")
+    end = text.index("static struct phy_device *__get_curr_phydev", begin)
+    text = text[:begin] + (ROOT / "overlay/board/realtek/tyfza1/ni-mdio.inc").read_text() + "\n" + text[end:]
+    begin = text.index("static ca_status_t __ca_mdio_c45_write")
     end = text.index("static int cortina_ni_start", begin)
-    ni.write_text(text[:begin] + '#include "../mdio.inc"\n\n' + text[end:])
+    text = text[:begin] + text[end:]
+    begin = text.index("static int do_phy_c45")
+    end = text.index("static const struct eth_ops", begin)
+    text = text[:begin] + text[end:]
+    begin = text.index("\tint i, ret;", text.index("static int cortina_of_to_plat"))
+    end = text.index('\tpriv->rxmode =', begin)
+    text = text[:begin] + "\tinit_port_map(priv);\n\n" + text[end:]
+    begin = text.index("\tif (priv->is_qxsgmii)")
+    end = text.index("\n}", begin)
+    text = text[:begin] + text[end:]
+    begin = text.index("\t/* bulk reset gpios */")
+    end = text.index("\tpriv->rx_xram_base_adr", begin)
+    text = text[:begin] + text[end:]
+    begin = text.index("\t/* hardware settings for RGMII port */")
+    end = text.index("#endif", begin)
+    text = text[:begin] + text[end:]
+    begin = text.index("static int cortina_ni_probe")
+    text = text[:begin] + text[begin:].replace("int i, ret;", "int ret;", 1)
+    # Recovery always follows a live internal jack, including old OEM envs.
+    begin = text.index("static void set_active_port")
+    end = text.index("int __weak aal_mode_sync", begin)
+    text = text[:begin] + text[end:]
+    begin = text.index("\tset_active_port(priv, 0);")
+    end = text.index("\n#if", begin)
+    text = text[:begin] + "\tpriv->active_port = 0;\n\tpriv->active_scan = 1;\n" + text[end:]
+    text = text.replace("\tchar\t\t\t*buf;\n\tint portid, active_scan;\n", "")
+    ni.write_text(text)
     replace(board / "vendor/eth_ni.c", "static int cortina_ni_start(struct udevice *dev)", '#include "../ni-board.inc"\n\nstatic int cortina_ni_start(struct udevice *dev)')
     replace(board / "vendor/eth_ni.c", "static void ni_auto_scan_active_port", "static int tyf_ni_phy_status(struct phy_device *phy);\n\nstatic void ni_auto_scan_active_port")
     replace(board / "vendor/eth_ni.c", "\t\tphy_startup(phydev);", "\t\ttyf_ni_phy_status(phydev);")
@@ -94,7 +122,7 @@ def main():
             "\tif (!is_valid_port(priv, priv->active_port))\n\t\treturn NULL;")
     replace(board / "vendor/eth_ni.c", "\t\t\tif (phydev) {\n\t\t\t\tprintf", "\t\t\tif (!phydev) {\n\t\t\t\tprintf(\"Recovery PHY missing: port %d, MDIO %d; disabling this port\\n\", i, m->phy_id);\n\t\t\t\tm->phy_id = -1;\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t\tif (phydev) {\n\t\t\t\tprintf")
     replace(board / "vendor/eth_ni.c", '\tprintf("CA NI version 0.9(DM_ETH)\\n");', '\tret = tyf_ni_board_prepare(priv);\n\tif (ret) return ret;\n\tprintf("CA NI version 0.9(DM_ETH)\\n");')
-    replace(board / "vendor/eth_ni.c", "\t\t\t\tphy_config(phydev);\n\n\t\t\t\tval = phy_read", "\t\t\t\tval = phy_config(phydev);\n\t\t\t\tif (val) {\n\t\t\t\t\tprintf(\"Recovery PHY port %d initialization failed (%d); disabling this port\\n\", i, val);\n\t\t\t\t\tphydev->link = 0;\n\t\t\t\t\tm->phy_id = -1;\n\t\t\t\t\tcontinue;\n\t\t\t\t}\n\t\t\t\tif (phydev->is_c45) { usable++; continue; }\n\n\t\t\t\tval = phy_read")
+    replace(board / "vendor/eth_ni.c", "\t\t\t\tphy_config(phydev);\n\n\t\t\t\tval = phy_read", "\t\t\t\tval = phy_config(phydev);\n\t\t\t\tif (val) {\n\t\t\t\t\tprintf(\"Recovery PHY port %d initialization failed (%d); disabling this port\\n\", i, val);\n\t\t\t\t\tphydev->link = 0;\n\t\t\t\t\tm->phy_id = -1;\n\t\t\t\t\tcontinue;\n\t\t\t\t}\n\n\t\t\t\tval = phy_read")
     replace(board / "vendor/eth_ni.c", '''\t\t\t\tval &= ~BMCR_PDOWN;
 \t\t\t\tphy_write(phydev, MDIO_DEVAD_NONE, MII_BMCR, val);''', '''\t\t\t\tif (val >= 0)
 \t\t\t\t\tval = phy_write(phydev, MDIO_DEVAD_NONE, MII_BMCR, val & ~BMCR_PDOWN);
@@ -111,8 +139,10 @@ def main():
 \t\tni_auto_scan_active_port(priv);
 \t\tpriv->is_phyinited = 1;''')
     replace(board / "vendor/eth_ni.c", '\t} else\n\t\tprintf("No PHY available\\n");', '\t} else\n\t\tputs("Recovery will wait for a LAN link.\\n");')
-    replace(board / "vendor/eth_ni.c", "\t\tpriv->aal_mode_sync(priv->active_port, priv->maps[priv->active_port].sds_mode,\n\t\t\t\t    p);", "\t\tif (priv->active_port == 4 && tyf_ni_port4_speed(p)) return -EIO;\n\t\tif (priv->aal_mode_sync(priv->active_port, priv->maps[priv->active_port].sds_mode, p))\n\t\t\treturn -EIO;")
-    replace(board / "vendor/eth_ni.c", "\tni_enable_tx_rx(priv->active_port, 1);", "\tif (is_valid_port(priv, priv->active_port)) ni_enable_tx_rx(priv->active_port, 1);")
+    replace(board / "vendor/eth_ni.c", "\t\tpriv->aal_mode_sync(priv->active_port, priv->maps[priv->active_port].sds_mode,\n\t\t\t\t    p);", "\t\tif (priv->aal_mode_sync(priv->active_port, priv->maps[priv->active_port].sds_mode, p))\n\t\t\treturn -EIO;")
+    replace(ni, '\t\tif (p->link)\n\t\t\tprintf', '\t\tif (!p->link) { priv->phydev = NULL; goto wait_link; }\n\t\tif (p->link)\n\t\t\tprintf')
+    replace(ni, '\t} else\n\t\tputs("Recovery will wait for a LAN link.\\n");', '\t}\nwait_link:\n\tif (!priv->phydev) puts("Recovery will wait for a LAN link.\\n");')
+    replace(ni, "\tni_enable_tx_rx(priv->active_port, 1);", "\tif (priv->phydev && priv->phydev->link) ni_enable_tx_rx(priv->active_port, 1);")
     replace(board / "vendor/eth_ni.c", "\t/* get the hw write pointer */", "\tif (tyf_ni_refresh_link(priv)) return -EIO;\n\n\t/* get the hw write pointer */")
     replace(board / "vendor/eth_ni.c", "\tstatic unsigned char   pkt_buf[2048];", "\tstatic unsigned char   pkt_buf[2048];\n\tif (!priv->phydev || !priv->phydev->link) return -ENETDOWN;\n\tif (length < 0 || length > 1518) return -EMSGSIZE;")
     replace(board / "vendor/eth_ni.c", '''\tif (hw_tx_rd_ptr != sw_tx_wr_ptr) {
@@ -137,10 +167,7 @@ def main():
             "hdr_xt.wrd |= (u32)valid_bytes << 12;")
     replace(board / "vendor/eth_ni.c", "if (packet_status.bf.packet_size > 1518) {", "if (packet_status.bf.packet_size > 1518 || packet_status.bf.packet_size < 18) {")
     replace(board / "vendor/eth_ni.h", "\tuint8_t is_qxsgmii;", "\tuint8_t is_qxsgmii;\n\tunsigned long link_polled;")
-    # Port4 uses the exact TYFZA1 S3 sequence above, shared with the Linux port.
-    replace(board / "vendor/eth_ni_taurus.c", "\tif (port >= NI_PORT_4) {", "\tif (port >= NI_PORT_5) {")
     replace(board / "vendor/eth_ni.c", "//ni_enable_tx_rx(priv->active_port, 0);", "if (is_valid_port(priv, priv->active_port))\n\t\tni_enable_tx_rx(priv->active_port, 0);")
-    replace(board / "vendor/eth_ni.c", '\t/*\n\tif ((buf = env_get("auto_scan_active_port")) != 0) {\n\t\tactive_scan = simple_strtoul(buf, NULL, 0);\n\t\tprintf(MODULE_NAME": env active_scan=%d\\n", active_scan);\n\t\tpriv->active_scan = active_scan;\n\t}\n\t*/', '\tif ((buf = env_get("auto_scan_active_port")) != 0) {\n\t\tactive_scan = simple_strtoul(buf, NULL, 0);\n\t\tpriv->active_scan = !!active_scan;\n\t}')
     replace(board / "vendor/spi_nand/cortina_spi_nand_base.c", "#include <watchdog.h>", "#include <u-boot/schedule.h>")
     # Recovery lamps: redraw in NAND loops and count written bytes for the progress bar.
     replace(board / "vendor/spi_nand/cortina_spi_nand_base.c", "#include <u-boot/schedule.h>", "#include <u-boot/schedule.h>\n#include <tyfza1_recovery.h>")
@@ -161,6 +188,11 @@ def main():
     (dest / "include/tyfza1_build.h").write_text(
         f"#define TYFZA1_PROJECT_VERSION {json.dumps(version)}\n"
         f"#define TYFZA1_BUILD_COMMIT {json.dumps(commit)}\n")
+    # The NI XRAM RX ring is 6 KiB. Bound each TCP sender to two full frames,
+    # leaving room for ARP/DHCP/control traffic while the CPU drains the ring.
+    opts = dest / "lib/lwip/u-boot/lwipopts.h"
+    shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/u-boot/lwipopts.h", opts)
+    replace(opts, "#define TCP_RCV_SCALE                   0x7", "#define TCP_RCV_SCALE                   0")
     # Preserve the complete frontend while reducing the two-FIP flash footprint.
     http = dest / "net/lwip/httpd.c"
     shutil.copy2(reference_path := ROOT / "sources" / lock["reference"]["directory"] / "net/lwip/httpd.c", http)
@@ -225,9 +257,13 @@ static int run_storage_job(void)
 \tif (ret) goto out_unmap;
 \tphase = "erase";
 \tret = storage_mtd_erase(mtd, request.offset, request.size);''')
-    replace(http, '"httpd_ipaddr", "httpd_netmask",', '"httpd_ipaddr", "httpd_netmask", "httpd_dhcp",')
+    replace(http, '"httpd_ipaddr", "httpd_netmask",', '"httpd_ipaddr", "httpd_netmask", "httpd_dhcp", "tyf_bootconf",')
     replace(http, '\tif (httpd_running)\n\t\treturn 0;', '\tif (httpd_running)\n\t\treturn 0;\n\tif (env_get_yesno("httpd_dhcp") == 0) with_dhcp = false;')
-    replace(http, '\t\tret = env_set(env_key, env_value[0] ? env_value : NULL);', '''\t\t/* Accept the familiar IP names as persistent recovery settings, too. */
+    replace(http, '\t\tret = env_set(env_key, env_value[0] ? env_value : NULL);', '''\t\tif (!strcmp(env_key, "tyf_bootconf")) {
+\t\t\tret = tyfza1_save_boot_config(env_value);
+\t\t\tbreak;
+\t\t}
+\t\t/* Accept the familiar IP names as persistent recovery settings, too. */
 \t\tif (!strcmp(env_key, "ipaddr"))
 \t\t\tret = env_set("httpd_ipaddr", env_value[0] ? env_value : NULL);
 \t\telse if (!strcmp(env_key, "netmask"))
@@ -275,14 +311,14 @@ static int run_storage_job(void)
     replace(http, '\t\tjson_printf(&j, "{\\"model\\":"); json_string(&j, board);', '''\t\tjson_printf(&j, "{\\"model\\":"); json_string(&j, board);
 #if defined(CONFIG_TARGET_TYFZA1)
 \t\t{
-\t\t\tconst char *variant = env_get("board_variant") ?: "";
+\t\t\tint full, speed = tyfza1_link_speed(&full);
 \t\t\tjson_printf(&j, ",\\"project_version\\":"); json_string(&j, TYFZA1_PROJECT_VERSION);
 \t\t\tjson_printf(&j, ",\\"build_commit\\":"); json_string(&j, TYFZA1_BUILD_COMMIT);
-\t\t\tjson_printf(&j, ",\\"ports\\":");
-\t\t\tjson_string(&j, !strcmp(variant, "4ge") ? "4×GE" :
-\t\t\t\t    !strcmp(variant, "2p5g") ? "2.5GE + 3×GE" : "");
+\t\t\tjson_printf(&j, ",\\"link_speed_mbps\\":%d,\\"link_full_duplex\\":%s", speed, full ? "true" : "false");
+\t\t\tjson_printf(&j, ",\\"boot_config\\":"); json_string(&j, tyfza1_boot_config() ?: "");
 \t\t}
 #endif''')
+    replace(http, '\tif (!strcmp(name, "/api/device"))\n\t\treturn fs_json(file, 200, info_buf, false);', '\tif (!strcmp(name, "/api/device")) {\n\t\tbuild_info();\n\t\treturn fs_json(file, 200, info_buf, false);\n\t}')
     # Recovery lamps follow the HTTP loop and job results.
     replace(http, "static void service_network(void)\n{", "static void service_network(void)\n{\n#if defined(CONFIG_TARGET_TYFZA1)\n\ttyfza1_recovery_leds_poll();\n#endif")
     replace(http, "\tjob_result = run_captured_job();", "#if defined(CONFIG_TARGET_TYFZA1)\n\tjob_result = tyf_http_run_job();\n#else\n\tjob_result = run_captured_job();\n#endif")

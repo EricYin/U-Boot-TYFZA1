@@ -20,6 +20,7 @@ class RecoveryNetworkTests(unittest.TestCase):
 #include <string.h>
 static char ip[64],mask[64],policy[64],env_key[64],env_value[64];
 static int saved,stopped;
+static int tyfza1_save_boot_config(const char *s){(void)s;return -22;}
 static int env_set(const char *key,const char *value) {
  char *dst=!strcmp(key,"httpd_ipaddr")?ip:!strcmp(key,"httpd_netmask")?mask:!strcmp(key,"httpd_dhcp")?policy:0;
  if(dst){strncpy(dst,value?value:"",63);dst[63]=0;}return 0;
