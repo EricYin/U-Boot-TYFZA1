@@ -112,6 +112,20 @@ def main():
     end = text.index("\n#if", begin)
     text = text[:begin] + "\tpriv->active_port = 0;\n\tpriv->active_scan = 1;\n" + text[end:]
     text = text.replace("\tchar\t\t\t*buf;\n\tint portid, active_scan;\n", "")
+    text = text.replace("static void cortina_ni_reset(", "static int cortina_ni_reset(")
+    text = text.replace("\tNI_HV_GLB_INIT_DONE_t init_done;", "\tNI_HV_GLB_INIT_DONE_t init_done;\n\tint ret;")
+    begin = text.index("\tif (readl_poll_timeout(NI_HV_GLB_INIT_DONE")
+    end = text.index("\n}", begin)
+    text = text[:begin] + """\tret = readl_poll_timeout(NI_HV_GLB_INIT_DONE, init_done.wrd,
+				 init_done.bf.ni_init_done, REG_TIMEOUT_US);
+	if (ret) {
+		printf("NI reset failed (%d), status=%x\\n", ret, init_done.wrd);
+		return ret;
+	}
+	priv->aal_set_active_port(priv->active_port);
+	return 0;
+""" + text[end:]
+    text = text.replace("\tcortina_ni_reset(priv);", "\tret = cortina_ni_reset(priv);\n\tif (ret) return ret;")
     ni.write_text(text)
     replace(ni, "static int cortina_ni_start(struct udevice *dev)", "static void init_port_map(struct cortina_ni_priv *priv);\n\nstatic int cortina_ni_start(struct udevice *dev)")
     replace(ni, "\tif (!priv->is_phyinited) {\n\t\tint i, val;", "\tif (!priv->is_phyinited) {\n\t\tint i, val;\n\t\t/* Retry from the physical map, not last attempt's disabled ports. */\n\t\tinit_port_map(priv);")
@@ -190,6 +204,31 @@ def main():
     (dest / "include/tyfza1_build.h").write_text(
         f"#define TYFZA1_PROJECT_VERSION {json.dumps(version)}\n"
         f"#define TYFZA1_BUILD_COMMIT {json.dumps(commit)}\n")
+    phy = dest / "drivers/net/phy/phy.c"
+    shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "drivers/net/phy/phy.c", phy)
+    replace(phy, "\tgenphy_config_aneg(phydev);\n\n\treturn 0;", "\treturn genphy_config_aneg(phydev);")
+    # Do not decode negative MDIO errors as partner advertisement bits.
+    replace(phy, "\tint mii_reg = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMSR);", "\tint mii_reg = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMSR);\n\n\tif (mii_reg < 0) return mii_reg;")
+    replace(phy, "\t\tu32 lpa = 0;", "\t\tint lpa = 0, advertise;")
+    replace(phy, "\t\tu32 estatus = 0;", "\t\tint estatus = 0;")
+    replace(phy, """\t\t\tif (gblpa < 0) {
+				debug("Could not read MII_STAT1000. ");
+				debug("Ignoring gigabit capability\\n");
+				gblpa = 0;
+			}
+			gblpa &= phy_read(phydev,
+					MDIO_DEVAD_NONE, MII_CTRL1000) << 2;""", """\t\t\tif (gblpa < 0) return gblpa;
+			advertise = phy_read(phydev, MDIO_DEVAD_NONE, MII_CTRL1000);
+			if (advertise < 0) return advertise;
+			gblpa &= advertise << 2;""")
+    replace(phy, """\t\tlpa = phy_read(phydev, MDIO_DEVAD_NONE, MII_ADVERTISE);
+		lpa &= phy_read(phydev, MDIO_DEVAD_NONE, MII_LPA);""", """\t\tlpa = phy_read(phydev, MDIO_DEVAD_NONE, MII_ADVERTISE);
+		if (lpa < 0) return lpa;
+		advertise = phy_read(phydev, MDIO_DEVAD_NONE, MII_LPA);
+		if (advertise < 0) return advertise;
+		lpa &= advertise;""")
+    replace(phy, "\t\tif (estatus & (ESTATUS_1000_XFULL", "\t\tif (estatus < 0) return estatus;\n\t\tif (estatus & (ESTATUS_1000_XFULL")
+    replace(phy, "\t\tu32 bmcr = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMCR);", "\t\tint bmcr = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMCR);\n\t\tif (bmcr < 0) return bmcr;")
     # Restore the pinned stack options on incremental builds as well.
     # TCP flow control includes software buffering; it is not an XRAM ring limit.
     opts = dest / "lib/lwip/u-boot/lwipopts.h"
@@ -205,6 +244,25 @@ def main():
             '    httpd_post_finished(hs, http_uri_buf, LWIP_HTTPD_URI_BUF_LEN);\n'
             '  }\n'
             '#endif')
+    # A prefetched custom download is not complete when its TCP PCB is aborted.
+    # Normal EOF already waits for queued payload ACKs; invalidate only errors.
+    replace(http_core, '  LWIP_DEBUGF(HTTPD_DEBUG, ("http_err: %s\\n", lwip_strerr(err)));',
+            '  LWIP_DEBUGF(HTTPD_DEBUG, ("http_err: %s\\n", lwip_strerr(err)));\n'
+            '#if LWIP_HTTPD_CUSTOM_FILES\n'
+            '  if (hs != NULL && hs->handle != NULL &&\n'
+            '      (hs->handle->flags & FS_FILE_FLAGS_CUSTOM)) {\n'
+            '    hs->handle->index = 0;\n'
+            '  }\n'
+            '#endif')
+    # HTTP timeout/explicit shutdown also reaches close without a TCP error.
+    replace(http_core, "  altcp_arg(pcb, NULL);", """#if LWIP_HTTPD_CUSTOM_FILES
+  if (hs != NULL && hs->handle != NULL &&
+      (hs->handle->flags & FS_FILE_FLAGS_CUSTOM) &&
+      (abort_conn || hs->left || altcp_sndqueuelen(pcb))) {
+    hs->handle->index = 0;
+  }
+#endif
+  altcp_arg(pcb, NULL);""")
     # Preserve the complete frontend while reducing the two-FIP flash footprint.
     http = dest / "net/lwip/httpd.c"
     shutil.copy2(reference_path := ROOT / "sources" / lock["reference"]["directory"] / "net/lwip/httpd.c", http)
