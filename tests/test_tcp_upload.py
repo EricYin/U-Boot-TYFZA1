@@ -89,7 +89,8 @@ class UploadWindowTests(unittest.TestCase):
         config=(ROOT/'build/tyfza1/.config').read_text()
         window=int(re.search(r'^CONFIG_LWIP_TCP_WND=(\d+)',config,re.M)[1])
         current_scale=int(re.search(r'#define TCP_RCV_SCALE\s+(\S+)',opts)[1],0)
-        for name,wnd,scale in [('small',2920,0),('current',window,current_scale)]:
+        for name,wnd,scale in [('small',2920,0),('current',window,current_scale),
+                               ('baseline',3000000,7)]:
             work=ROOT/f'build/tcp-review-{name}'
             (work/'arch').mkdir(parents=True,exist_ok=True);(work/'linux').mkdir(exist_ok=True)
             (work/'arch/cc.h').write_text('#include <stdio.h>\n#include <stdlib.h>\n#include <stdint.h>\n')
@@ -109,17 +110,22 @@ class UploadWindowTests(unittest.TestCase):
                 for rtt,cpu in [(100,2),(1000,2),(3000,2),(10000,2),(100,100)]]
         (ROOT/'build/tcp-upload-results.json').write_text(json.dumps(cls.results,indent=2)+'\n')
 
-    def test_two_mss_window_limits_throughput_despite_no_fifo_loss(self):
-        for small,current in zip(self.results['small'][:4],self.results['current'][:4]):
-            self.assertEqual(small['drops'],0);self.assertEqual(current['drops'],0)
-            self.assertEqual(small['received'],292000);self.assertEqual(current['received'],292000)
-            self.assertGreater(current['model_MB_s'],small['model_MB_s']*3)
-        self.assertLess(self.results['small'][2]['model_MB_s'],1.1)
+    def test_four_mss_improves_on_two_mss_but_limits_long_rtt(self):
+        for small,current,baseline in zip(self.results['small'][:4],
+                                          self.results['current'][:4],
+                                          self.results['baseline'][:4]):
+            for result in (small,current,baseline):
+                self.assertEqual(result['drops'],0)
+                self.assertEqual(result['received'],292000)
+            self.assertGreater(current['model_MB_s'],small['model_MB_s']*1.5)
+            self.assertGreater(baseline['model_MB_s'],current['model_MB_s']*1.5)
+        self.assertLess(self.results['current'][2]['model_MB_s'],2.1)
 
-    def test_small_window_increases_ack_work(self):
-        self.assertGreater(self.results['small'][0]['acks'],self.results['current'][0]['acks'])
+    def test_reduced_window_increases_ack_work(self):
+        self.assertGreater(self.results['current'][0]['acks'],self.results['baseline'][0]['acks'])
 
-    def test_slow_cpu_still_exposes_fifo_limit_with_large_window(self):
+    def test_slow_cpu_can_overflow_fifo_even_with_current_window(self):
+        self.assertGreater(self.results['baseline'][-1]['drops'],0)
         self.assertGreater(self.results['current'][-1]['drops'],0)
 
 if __name__=='__main__':

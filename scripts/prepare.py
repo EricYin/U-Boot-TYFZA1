@@ -232,10 +232,12 @@ def main():
 		lpa &= advertise;""")
     replace(phy, "\t\tif (estatus & (ESTATUS_1000_XFULL", "\t\tif (estatus < 0) return estatus;\n\t\tif (estatus & (ESTATUS_1000_XFULL")
     replace(phy, "\t\tu32 bmcr = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMCR);", "\t\tint bmcr = phy_read(phydev, MDIO_DEVAD_NONE, MII_BMCR);\n\t\tif (bmcr < 0) return bmcr;")
-    # Restore the pinned stack options on incremental builds as well.
-    # TCP flow control includes software buffering; it is not an XRAM ring limit.
+    # Reset the pinned stack options on incremental builds as well.
+    # The board's recovery window is below 64 KiB, so retain byte precision.
     opts = dest / "lib/lwip/u-boot/lwipopts.h"
     shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/u-boot/lwipopts.h", opts)
+    replace(opts, "#define TCP_RCV_SCALE                   0x7",
+            "#define TCP_RCV_SCALE                   0")
     # A peer RST bypasses the normal close callback. Release partial POST state.
     http_core = dest / "lib/lwip/lwip/src/apps/http/httpd.c"
     shutil.copy2(ROOT / "sources" / lock["reference"]["directory"] / "lib/lwip/lwip/src/apps/http/httpd.c", http_core)
