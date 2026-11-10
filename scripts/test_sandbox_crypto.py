@@ -245,12 +245,14 @@ def add_metadata(data, factory=True):
     full=data+info
     return full+struct.pack(">IIB3xI",0x46577830,(~zlib.crc32(full))&0xffffffff,1,len(info)+16)
 
-stream=io.BytesIO()
-rootfs=bytearray(2*1024*1024);rootfs[:4]=b"hsqs";struct.pack_into("<Q",rootfs,40,len(rootfs))
-with tarfile.open(fileobj=stream,mode="w",format=tarfile.USTAR_FORMAT) as tar:
-    for name,data in [("kernel",boot_raw.read_bytes()),("root",rootfs)]:
-        entry=tarfile.TarInfo("sysupgrade-tianyi_tyfza1/"+name);entry.size=len(data);tar.addfile(entry,io.BytesIO(data))
-install_inputs=[("fixture",add_metadata(stream.getvalue()))]
+install_inputs=[]
+for label,root_size in (("fixture",2*1024*1024),("large-root",33*1024*1024)):
+    stream=io.BytesIO()
+    rootfs=bytearray(root_size);rootfs[:4]=b"hsqs";struct.pack_into("<Q",rootfs,40,len(rootfs))
+    with tarfile.open(fileobj=stream,mode="w",format=tarfile.USTAR_FORMAT) as tar:
+        for name,data in [("kernel",boot_raw.read_bytes()),("root",rootfs)]:
+            entry=tarfile.TarInfo("sysupgrade-tianyi_tyfza1/"+name);entry.size=len(data);tar.addfile(entry,io.BytesIO(data))
+    install_inputs.append((label,add_metadata(stream.getvalue())))
 if os.environ.get("TYFZA1_SYSUPGRADE"):
     install_inputs.append(("user",Path(os.environ["TYFZA1_SYSUPGRADE"]).read_bytes()))
 install_rows=[]

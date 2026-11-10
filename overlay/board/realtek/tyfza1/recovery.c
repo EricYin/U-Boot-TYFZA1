@@ -233,8 +233,7 @@ int tyfza1_install_system(ulong address, size_t size, void (*poll)(void))
 	data = ubi->volumes[11];
 	if (!ubi->volumes[slot ? 6 : 3] || strcmp(ubi->volumes[slot ? 6 : 3]->name, kernel) ||
 	    !rootvol || strcmp(rootvol->name, root) ||
-	    (data && strcmp(data->name, "rootfs_data")) ||
-	    fw.root.size > 33648640) { ret = -EINVAL; goto out; }
+	    (data && strcmp(data->name, "rootfs_data"))) { ret = -EINVAL; goto out; }
 	root_lebs = DIV_ROUND_UP(fw.root.size, rootvol->usable_leb_size);
 	available = ubi->avail_pebs + rootvol->reserved_pebs + (data ? data->reserved_pebs : 0);
 	if (ubi->beb_rsvd_level > ubi->beb_rsvd_pebs)

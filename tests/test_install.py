@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Run the system installer with a real sysupgrade parser and modeled UBI/env I/O."""
 import ctypes as C
+import errno
 import io
 from pathlib import Path
 import subprocess
@@ -76,6 +77,7 @@ static int ubi_volume_read_quiet(const char *name,char *buffer,size_t off,size_t
 }
 static struct ubi_volume_desc *ubi_open_volume(int n,int id,int mode) { (void)n;(void)mode;desc.vol=&vols[id];return &desc; }
 static int ubi_resize_volume(struct ubi_volume_desc *d,int lebs) {
+ if(lebs-d->vol->reserved_pebs>device.avail_pebs)return -ENOSPC;
  device.avail_pebs+=d->vol->reserved_pebs-lebs;d->vol->reserved_pebs=lebs;return 0;
 }
 static void ubi_close_volume(struct ubi_volume_desc *d) { (void)d; }
@@ -89,7 +91,9 @@ static int run_command(const char *command,int flags) {
  strcpy(vols[11].name,"rootfs_data");device.volumes[11]=&vols[11];device.avail_pebs=0;return 0;
 }
 static int ubi_volume_write(char *name,const void *data,size_t off,size_t length) {
- (void)data;(void)off;(void)length;
+ struct ubi_volume *v=find(name);(void)data;(void)off;
+ if(!v)return -ENOENT;
+ if(length>(size_t)v->reserved_pebs*v->usable_leb_size)return -EFBIG;
  if(!strcmp(name,"ubi_k0"))last_slot=0;
  if(!strcmp(name,"ubi_k1"))last_slot=1;
  writes++;return find(name)?0:-ENOENT;
@@ -119,6 +123,9 @@ void test_old_fit(int slot,int native) {
  fdt_pack(old_fits[slot]);
 }
 void test_read_failure(void) { read_fail=1; }
+void test_space(int data_pebs,int bad_reserve) {
+ vols[11].reserved_pebs=data_pebs;device.beb_rsvd_level=bad_reserve;
+}
 int test_install(const void *data,size_t size) { return tyfza1_install_system((ulong)data,size,no_poll); }
 int test_state(int key) {
  if(key==0)return last_slot;if(key==1)return installed[0]?installed[0]-'0':-1;
@@ -132,14 +139,21 @@ int test_state(int key) {
         fdt=ROOT/'build/u-boot/scripts/dtc/libfdt'
         subprocess.run(['cc','-O2','-shared','-fPIC','-Wall','-Wextra','-Werror','-Wno-misleading-indentation','-I'+str(board),'-I'+str(fdt),str(cfile),str(board/'formats.c'),*[str(p) for p in fdt.glob('fdt*.c')],'-o',str(lib)],check=True)
         cls.lib=C.CDLL(str(lib));cls.lib.test_install.argtypes=[C.c_void_p,C.c_size_t]
+        cls.data=cls.firmware(8*1024*1024);cls.buffer=C.create_string_buffer(cls.data)
+
+    @staticmethod
+    def firmware(root_size):
         stream=io.BytesIO()
-        root=bytearray(8*1024*1024);root[:4]=b'hsqs';struct.pack_into('<Q',root,40,len(root))
+        root=bytearray(root_size);root[:4]=b'hsqs';struct.pack_into('<Q',root,40,len(root))
         with tarfile.open(fileobj=stream,mode='w',format=tarfile.USTAR_FORMAT) as archive:
             for name,data in [('CONTROL',b'BOARD=tianyi_tyfza1\n'),('kernel',b'\xd0\x0d\xfe\xed'+bytes(1000)),('root',root)]:
                 info=tarfile.TarInfo('sysupgrade-tianyi_tyfza1/'+name);info.size=len(data);archive.addfile(info,io.BytesIO(data))
-        cls.data=stream.getvalue();cls.buffer=C.create_string_buffer(cls.data)
+        return stream.getvalue()
 
     def install(self):return self.lib.test_install(self.buffer,len(self.data))
+    def install_root(self,size):
+        data=self.firmware(size);buffer=C.create_string_buffer(data)
+        return self.lib.test_install(buffer,len(data))
     def state(self,key):return self.lib.test_state(key)
     def test_first_install_selects_other_slot_and_records_it(self):
         for committed in [0,1]:
@@ -167,4 +181,36 @@ int test_state(int key) {
     def test_read_failure_stops_before_any_write(self):
         self.lib.test_reset(0,-1,0);self.lib.test_read_failure()
         self.assertNotEqual(self.install(),0);self.assertEqual(self.state(6),0)
+    def test_root_larger_than_factory_volume_grows_into_data_space(self):
+        for size in (33648640+1,33*1024*1024):
+            with self.subTest(size=size):
+                self.lib.test_reset(0,1,0)
+                self.assertEqual(self.install_root(size),0)
+                self.assertEqual(self.state(3),265)
+                self.assertEqual(self.state(4),(size+126975)//126976)
+                self.assertGreaterEqual(self.state(5)*126976,16*1024*1024)
+    def test_large_root_uses_available_capacity_in_either_slot(self):
+        for slot,size in ((0,40*1024*1024),(1,64*1024*1024)):
+            with self.subTest(slot=slot,size=size):
+                self.lib.test_reset(slot,slot,0);self.lib.test_space(1000,0)
+                self.assertEqual(self.install_root(size),0)
+                lebs=(size+126975)//126976
+                self.assertEqual(self.state(3+slot),lebs)
+                self.assertEqual(self.state(4-slot),265)
+                self.assertEqual(self.state(5),1265-lebs)
+                self.assertEqual(self.state(0),slot)
+    def test_data_space_reserve_is_enforced_before_changing_volumes(self):
+        reserve=(16*1024*1024+126975)//126976
+        maximum=(265+143-reserve)*126976
+        self.lib.test_reset(0,1,0)
+        self.assertEqual(self.install_root(maximum),0)
+        self.assertEqual(self.state(5),reserve)
+        self.lib.test_reset(0,1,0)
+        self.assertEqual(self.install_root(maximum+1),-errno.ENOSPC)
+        self.assertEqual([self.state(k) for k in (2,3,4,5,6)],[0,265,265,143,0])
+    def test_bad_block_reserve_reduces_large_root_capacity(self):
+        reserve=(16*1024*1024+126975)//126976
+        self.lib.test_reset(0,1,0);self.lib.test_space(143,1)
+        self.assertEqual(self.install_root((265+143-reserve)*126976),-errno.ENOSPC)
+        self.assertEqual([self.state(k) for k in (2,3,4,5,6)],[0,265,265,143,0])
 if __name__=='__main__':unittest.main()
